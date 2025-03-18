@@ -5,10 +5,15 @@ __pycache__/
 
 # C extensions
 *.so
+*.pyd
+
+# Cython generated files
+*.c
+*.cpp
 
 # Distribution / packaging
 .Python
-build/
+/build/
 develop-eggs/
 dist/
 downloads/
@@ -25,6 +30,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+# Make sure we don't ignore the ares/build directory
+!ares/build/
+!ares/build/*
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
