@@ -12,15 +12,7 @@ class BuildConfig(BaseConfig):
         self._create_default_config()
         
     def _create_default_config(self):
-        self.set("compiler", "optimization_level", "O2")
-        self.set("compiler", "debug_symbols", "False")
-        self.set("compiler", "additional_flags", "/favor:AMD64 /DWIN64" if os.name == 'nt' else "-march=native")
-        self.set("compiler", "parallel_jobs", "4")
-        self.set("compiler", "include_dirs", "")
-        self.set("compiler", "library_dirs", "")
-        self.set("compiler", "use_ninja", "True")
-        self.set("compiler", "enable_lto", "True")
-
+        # Packager section
         self.set("packager", "include_debug_files", "False")
         self.set("packager", "create_installer", "True")
         self.set("packager", "compression_level", "9")
@@ -33,6 +25,7 @@ class BuildConfig(BaseConfig):
         self.set("packager", "product_name", "Ares Engine")
         self.set("packager", "file_description", "Cross-platform game engine with Cython acceleration")
         
+        # Assets section
         self.set("assets", "compress_textures", "True")
         self.set("assets", "audio_quality", "medium")
         self.set("assets", "bundle_assets", "True")
@@ -42,13 +35,25 @@ class BuildConfig(BaseConfig):
         self.set("assets", "optimize_assets", "True")
         self.set("assets", "asset_compression", "zlib")
         
+        # Version section
         self.set("version", "major", "0")
         self.set("version", "minor", "1")
         self.set("version", "patch", "0")
         self.set("version", "release_type", "alpha")
         self.set("version", "build", "auto")
         
-        self.set("build", "pkg_cfg", "pkg_data")
+        # Build section
+        self.set("build", "use_ninja", "True")
+        self.set("build", "optimize", "3")
+        self.set("build", "parallel", "True")
+        self.set("build", "inplace", "True")
+        self.set("build", "package_config", "package")
+        
+        # Cython section
+        self.set("cython", "language_level", "3")
+        self.set("cython", "boundscheck", "False")
+        self.set("cython", "wraparound", "False")
+        self.set("cython", "cdivision", "True")
     
     def get_compiler_flags(self):  
         flags = []
@@ -91,4 +96,4 @@ class BuildConfig(BaseConfig):
         self.set("version", "patch", str(current + 1))
     
     def get_package_data_config(self):
-        return self.get("build", "pkg_cfg", "pkg_data")
+        return self.get("build", "package_config", "package")

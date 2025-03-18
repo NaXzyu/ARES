@@ -1,6 +1,6 @@
 # Ares Engine
 
-A cross-platform Vulkan game engine with Cython acceleration.
+A cross-platform Vulkan game engine with Cython GPU acceleration.
 
 ## Features
 
@@ -9,6 +9,10 @@ A cross-platform Vulkan game engine with Cython acceleration.
 - Vulkan rendering support
 - Modern Python (3.12+) codebase
 - Comprehensive configuration system
+- OS Independent builds & executables
+- Parallel CPU cores with multi-threading support
+- Built-in CUDA and AMD support
+- 🔥Ultra-fast incremental build system
 
 ## Installation
 
@@ -16,31 +20,40 @@ A cross-platform Vulkan game engine with Cython acceleration.
 
 - Python 3.12 or higher
 - C++ compiler (Visual Studio, GCC, Clang)
-- Ninja build system (optional, for faster builds)
+- Ninja build system (optional, for parallel builds)
 
-### Installation Options
+#### Install from GitHub (recommended)
 
-#### Option 1: Install directly from GitHub (recommended)
+To install directly from GitHub, run:
 
 ```bash
-# Install directly from GitHub
 pip install git+https://github.com/naxzyu/ares-engine.git
 ```
 
-You can also add it to your project's requirements.txt:
+You can also add it to your project's requirements.txt.
 
-#### Option 2: Using setup.py (recommended for development)
+### Building
+
+You may also choose to build the engine from the orginal source code from scratch. This is a relatively easy process if you follow the steps below:
+
+#### Using setup.py (recommended for development)
+
+Clone the repository and run the setup utility:
 
 ```bash
-# Clone the repository
 git clone https://github.com/naxzyu/ares-engine.git
 cd ares-engine
 
-# Or use the setup utility (which will create a virtual environment for you)
+# Creates a virtual environment automatically.
 python setup.py
+
+# Build the engine
+python setup.py --build
 ```
 
 ## Usage
+
+The follow code snippets are examples of how to use Ares Engine:
 
 ```python
 import ares
@@ -73,10 +86,11 @@ window.close()
 
 ## Configuration
 
-Engine configuration is stored in INI files:
+The configuration for Ares Engine is very straight-forward and modular. The Engine configuration is stored in INI files:
 
 - `engine.ini` - Core engine settings
 - `build.ini` - Build and compilation settings
+- `package.ini` - Source code definitions
 
 Settings are automatically loaded at startup, and can be accessed through the configuration API:
 
@@ -96,4 +110,25 @@ version = build_config.get_version_string()
 
 ## License
 
-[Apache 2.0 License](LICENSE)
+This dataset is licensed under the [Apache 2.0 License](LICENSE)
+
+## Citations
+
+Please use the following BibTeX entry to cite this dataset:
+
+```bibtex
+@software{ares-engine,
+  author = {Kara Rawson, Aimee Chrzanowski},
+  title = {Ares Engine: A cross-platform Vulkan game engine with Cython GPU acceleration},
+  year = {2025},
+  howpublished = {\url{https://github.com/NaXzyu/ares-engine}},
+  note = {Accessed: 2026-01-26}
+}
+```
+
+## Contact
+
+For questions or support, please contact us at:
+
+- **Email**: <rawsonkara@gmail.com>
+- **Discord**: [Join our Discord](https://discord.gg/2xpqjDUkHD)

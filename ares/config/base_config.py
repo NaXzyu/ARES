@@ -11,21 +11,10 @@ class BaseConfig:
         self.config_name = config_name
         self.user_path = USER_CONFIG_DIR / f"{config_name}.ini"
         self.config = config.load(self.config_name)
-        
-        if not self.config.sections():
-            print(f"No configuration found for {self.config_name}. Creating defaults...")
-            self._create_default_config()
-            self.save()
     
     def load(self):
         """Load configuration. Called for explicit reloading."""
         self.config = config.load(self.config_name)
-        
-        if not self.config.sections():
-            print(f"No configuration found for {self.config_name}. Creating defaults...")
-            self._create_default_config()
-            self.save()
-            
         return True
     
     def save(self):
@@ -33,10 +22,6 @@ class BaseConfig:
         if self.config:
             config.save(self.config_name, self.config)
         return True
-    
-    def _create_default_config(self):
-        """Create default configuration settings. Override in subclasses."""
-        pass
     
     def get(self, section, option, fallback=None):
         """Get a string value from the configuration."""

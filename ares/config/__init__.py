@@ -44,46 +44,63 @@ os.makedirs(USER_CONFIG_DIR, exist_ok=True)
 from .config import Config, config, get_config
 
 def _import_configs():
-    global engine_config, build_config
+    global engine_config, build_config, package_config
     from .engine_config import EngineConfig
     from .build_config import BuildConfig
+    from .package_config import PackageConfig
     
     engine_config = EngineConfig()
     build_config = BuildConfig()
-    return engine_config, build_config
+    package_config = PackageConfig()
+    return engine_config, build_config, package_config
 
 engine_config = None
 build_config = None
+package_config = None
 
 def initialize():
-    global engine_config, build_config
-    if engine_config is None or build_config is None:
-        engine_config, build_config = _import_configs()
+    global engine_config, build_config, package_config
+    if engine_config is None or build_config is None or package_config is None:
+        engine_config, build_config, package_config = _import_configs()
     
     _ensure_config_files_exist()
     
     engine_config.load()
     build_config.load()
+    package_config.load()
     
     print(f"Configuration loaded from {USER_CONFIG_DIR}")
     return True
 
 def save_all():
-    global engine_config, build_config
-    if engine_config is None or build_config is None:
-        engine_config, build_config = _import_configs()
+    global engine_config, build_config, package_config
+    if engine_config is None or build_config is None or package_config is None:
+        engine_config, build_config, package_config = _import_configs()
     
     engine_config.save()
     build_config.save()
+    package_config.save()
     
     print(f"Configuration saved to {USER_CONFIG_DIR}")
     return True
 
 def _ensure_config_files_exist():
-    for config_file in ['engine.ini', 'build.ini']:
+    for config_file in ['engine.ini', 'build.ini', 'package.ini', 'compiler.ini']:
         source = CONFIG_FILES_DIR / config_file
         destination = USER_CONFIG_DIR / config_file
         
         if source.exists() and not destination.exists():
             shutil.copy2(source, destination)
             print(f"Created default config file: {destination}")
+
+# Define exports
+__all__ = [
+    # Config objects
+    'config', 'get_config', 'engine_config', 'build_config', 'package_config',
+    
+    # Directory paths
+    'USER_CONFIG_DIR', 'CONFIG_DIR', 'CONFIG_FILES_DIR',
+    
+    # Functions
+    'initialize', 'save_all'
+]

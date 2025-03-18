@@ -9,13 +9,14 @@ import subprocess
 import argparse
 import re
 import shutil
+import configparser
 from pathlib import Path
 from setuptools import setup, find_packages
 
 # Define minimal constants needed to bootstrap
 PROJECT_ROOT = Path(__file__).resolve().parent
 VENV_DIR = PROJECT_ROOT / ".venv"
-BUILD_SCRIPT = PROJECT_ROOT / "ares" / "utils" / "build_engine.py"
+BUILD_SCRIPT = PROJECT_ROOT / "ares" / "build" / "build_engine.py"  # Updated path
 
 # Package metadata
 METADATA = {
@@ -33,14 +34,6 @@ METADATA = {
     ],
     "python_requires": ">=3.12",
     "packages": find_packages(exclude=["examples"]),
-    "package_data": {
-        "ares": [
-            "config_files/*.ini",
-            "math/*.pyx", "math/*.pxd",
-            "physics/*.pyx", "physics/*.pxd",
-            "renderer/*.pyx", "renderer/*.pxd"
-        ]
-    },
     "include_package_data": True,
     "zip_safe": False
 }
@@ -181,12 +174,6 @@ def clean_project():
             print(f"Removing {pycache}")
             shutil.rmtree(pycache)
     
-    # Remove temp setup file if it exists (now in build directory)
-    temp_setup = build_dir / "temp_setup.py"
-    if temp_setup.exists():
-        print(f"Removing {temp_setup}")
-        temp_setup.unlink()
-    
     print("Clean up completed!")
 
 def create_parser():
@@ -199,16 +186,19 @@ Examples:
   py setup.py             Create/setup virtual environment
   py setup.py --build     Build the engine package
   py setup.py --clean     Clean up build artifacts
+  py setup.py --build --force   Force rebuild all Cython modules
 """
     )
     parser.add_argument('--build', action='store_true', help='Build the engine into a distributable package')
     parser.add_argument('--clean', action='store_true', help='Clean up build artifacts')
+    parser.add_argument('--force', action='store_true', help='Force rebuilding all Cython modules and packages')
+    
     return parser
 
 # Try to import the build_ext class if available
 cmdclass = {}
 try:
-    from ares.utils.build_ext_ninja import BuildExtWithNinja
+    from ares.build.build_ext_ninja import BuildExtWithNinja  # Updated import path
     cmdclass["build_ext"] = BuildExtWithNinja
 except ImportError:
     pass
@@ -233,7 +223,10 @@ if __name__ == "__main__":
             py_exe = get_venv_python(skip_setup=True)
             print(f"Running build with '{py_exe}'")
             try:
-                subprocess.run([str(py_exe), str(BUILD_SCRIPT), "--python", str(py_exe)], check=True)
+                cmd = [str(py_exe), str(BUILD_SCRIPT), "--python", str(py_exe)]
+                if args.force:
+                    cmd.append("--force")
+                subprocess.run(cmd, check=True)
             except subprocess.CalledProcessError as e:
                 print(f"Error running build script: {e}")
                 sys.exit(1)

@@ -11,6 +11,7 @@ class EngineConfig(BaseConfig):
         self._create_default_config()
         
     def _create_default_config(self):
+        # Graphics section
         self.set("graphics", "resolution_width", "1280")
         self.set("graphics", "resolution_height", "720")
         self.set("graphics", "fullscreen", "False")
@@ -24,6 +25,7 @@ class EngineConfig(BaseConfig):
         self.set("graphics", "anisotropic_filtering", "4")
         self.set("graphics", "post_processing", "True")
         
+        # Audio section
         self.set("audio", "master_volume", "0.8")
         self.set("audio", "music_volume", "0.7")
         self.set("audio", "sfx_volume", "1.0")
@@ -34,6 +36,7 @@ class EngineConfig(BaseConfig):
         self.set("audio", "spatial_audio", "True")
         self.set("audio", "sample_rate", "48000")
         
+        # Input section
         self.set("input", "mouse_sensitivity", "1.0")
         self.set("input", "invert_y", "False")
         self.set("input", "controller_enabled", "True")
@@ -41,6 +44,7 @@ class EngineConfig(BaseConfig):
         self.set("input", "controller_deadzone", "0.1")
         self.set("input", "key_mapping", "default")
         
+        # Physics section
         self.set("physics", "timestep", "0.016")
         self.set("physics", "gravity", "9.81")
         self.set("physics", "simulation_quality", "medium")
@@ -48,6 +52,7 @@ class EngineConfig(BaseConfig):
         self.set("physics", "collision_precision", "medium")
         self.set("physics", "use_multithreaded_physics", "True")
         
+        # Debug section
         self.set("debug", "logging_level", "info")
         self.set("debug", "show_fps", "False")
         self.set("debug", "show_debug_info", "False")
