@@ -1,20 +1,21 @@
 """
-Ares Engine: A cross-platform game engine with Cython acceleration.
+Ares Engine - A cross-platform game engine with Cython acceleration.
 """
 
 from __future__ import annotations
 
-# Package version
-__version__ = "0.1.0"
+# Use lazy imports so utilities can be imported without pulling in SDL2
+__all__ = ['Window', 'Input', 'Renderer']
 
-# Import core components for direct access
-from ares.core import Window, Input
-
-# Define what gets imported with "from ares import *"
-__all__ = [
-    # Core components
-    'Window', 'Input',
+def __getattr__(name):
+    if name == 'Window':
+        from ares.core import Window
+        return Window
+    elif name == 'Input':
+        from ares.core import Input
+        return Input
+    elif name == 'Renderer':
+        from ares.renderer import Renderer
+        return Renderer
     
-    # Package metadata
-    '__version__'
-]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

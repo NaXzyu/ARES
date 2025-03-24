@@ -11,7 +11,7 @@ from setuptools.command.build_ext import build_ext
 # Get project root
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-class BuildExtWithNinja(build_ext):
+class NinjaCompiler(build_ext):
     def finalize_options(self):
         super().finalize_options()
         

@@ -15,13 +15,20 @@ from pathlib import Path
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parent.parent
 BUILD_DIR = PROJECT_ROOT / "build"
+LOGS_DIR = PROJECT_ROOT / "logs"
 CACHE_DIR = BUILD_DIR / "cache"
 BUILD_CACHE_FILE = CACHE_DIR / "build_cache.json"
-BUILD_LOG_PATH = BUILD_DIR / "build.log"
+BUILD_LOG_PATH = LOGS_DIR / "build.log"
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
+# Import logging after path setup
+from ares.utils import log
 from ares.utils.utils import format_size, format_time
+from ares.config.logging_config import initialize_logging
+
+# Initialize logging
+initialize_logging(LOGS_DIR)
 
 def compute_file_hash(file_path):
     """Compute the MD5 hash of a file."""
@@ -40,7 +47,7 @@ def load_build_cache():
         with open(BUILD_CACHE_FILE, "r") as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError) as e:
-        print(f"Warning: Failed to load build cache: {e}")
+        log.warn(f"Warning: Failed to load build cache: {e}")
         return {"files": {}, "last_build": None}
 
 def save_build_cache(cache):
@@ -50,12 +57,12 @@ def save_build_cache(cache):
         with open(BUILD_CACHE_FILE, "w") as f:
             json.dump(cache, f, indent=2)
     except IOError as e:
-        print(f"Warning: Failed to save build cache: {e}")
+        log.warn(f"Warning: Failed to save build cache: {e}")
 
 def check_file_changes(extensions, force=False):
     """Check which files have changed since the last build."""
     if force:
-        print("Force rebuild requested, rebuilding all Cython modules.")
+        log.info("Force rebuild requested, rebuilding all Cython modules.")
         return extensions
         
     cache = load_build_cache()
@@ -66,7 +73,7 @@ def check_file_changes(extensions, force=False):
         for source in ext.sources:
             source_path = Path(source)
             if not source_path.exists():
-                print(f"Warning: Source file {source} not found.")
+                log.warn(f"Warning: Source file {source} not found.")
                 ext_changed = True
                 continue
                 
@@ -74,7 +81,7 @@ def check_file_changes(extensions, force=False):
             cached_hash = cache["files"].get(str(source_path), None)
             
             if cached_hash != current_hash:
-                print(f"File {source_path.name} has changed or is new.")
+                log.info(f"File {source_path.name} has changed or is new.")
                 cache["files"][str(source_path)] = current_hash
                 ext_changed = True
                 
@@ -84,7 +91,7 @@ def check_file_changes(extensions, force=False):
                 cached_hash = cache["files"].get(str(pxd_path), None)
                 
                 if cached_hash != current_hash:
-                    print(f"File {pxd_path.name} has changed.")
+                    log.info(f"File {pxd_path.name} has changed.")
                     cache["files"][str(pxd_path)] = current_hash
                     for ext_obj in extensions:
                         if str(source_path) in ext_obj.sources:
@@ -101,7 +108,7 @@ def check_file_changes(extensions, force=False):
 
 def check_compiled_modules():
     """Check if the Cython modules are compiled and move them if needed."""
-    print("Checking for compiled modules...")
+    log.info("Checking for compiled modules...")
     
     cython_dirs = [
         (PROJECT_ROOT / "ares" / "core", "core modules"),
@@ -116,7 +123,7 @@ def check_compiled_modules():
         for ext in ['.pyd', '.so']:
             if list(cython_dir.glob(f"*{ext}")):
                 modules_found = True
-                print(f"Found compiled {desc}")
+                log.info(f"Found compiled {desc}")
                 break
     
     if not modules_found:
@@ -129,14 +136,14 @@ def check_compiled_modules():
                     for ext in ['.pyd', '.so']:
                         for file in source_path.glob(f"*{ext}"):
                             target = cython_dir / file.name
-                            print(f"Moving {file} to {target}")
+                            log.info(f"Moving {file} to {target}")
                             shutil.copy2(file, target)
                             modules_found = True
     
     if modules_found:
-        print("Cython modules compiled successfully.")
+        log.info("Cython modules compiled successfully.")
     else:
-        print("Error: Could not find compiled Cython modules.")
+        log.error("Error: Could not find compiled Cython modules.")
         sys.exit(1)
         
     return modules_found
@@ -158,16 +165,16 @@ def get_extensions(extra_compile_args=None):
     if package_config and package_config.has_section("extensions"):
         for name, path_spec in package_config.items("extensions"):
             if ":" not in path_spec:
-                print(f"Error: Invalid extension format for {name}: {path_spec}")
-                print("Extension format should be 'module.name:path/to/file.pyx'")
+                log.error(f"Error: Invalid extension format for {name}: {path_spec}")
+                log.error("Extension format should be 'module.name:path/to/file.pyx'")
                 sys.exit(1)
                 
             module_name, pyx_path = path_spec.split(":", 1)
             pyx_path = pyx_path.strip()
             
             if not Path(pyx_path).exists():
-                print(f"Error: Extension source file not found: {pyx_path}")
-                print("Please verify the path is correct in package.ini")
+                log.error(f"Error: Extension source file not found: {pyx_path}")
+                log.error("Please verify the path is correct in package.ini")
                 sys.exit(1)
                 
             extensions.append(
@@ -180,9 +187,9 @@ def get_extensions(extra_compile_args=None):
     
     # Report error if no extensions defined
     if not extensions:
-        print("Error: No Cython extensions defined in package.ini")
-        print("Please add extension definitions to the [extensions] section")
-        print("Format: name = module.name:path/to/file.pyx")
+        log.error("Error: No Cython extensions defined in package.ini")
+        log.error("Please add extension definitions to the [extensions] section")
+        log.error("Format: name = module.name:path/to/file.pyx")
         sys.exit(1)
     
     return extensions
@@ -229,10 +236,10 @@ def compile_cython_modules(python_exe, force=False):
     extensions_to_build = check_file_changes(all_extensions, force)
     
     if not extensions_to_build:
-        print("No Cython files have changed. Skipping compilation.")
+        log.info("No Cython files have changed. Skipping compilation.")
         return check_compiled_modules()
     
-    print(f"Compiling {len(extensions_to_build)}/{len(all_extensions)} Cython modules...")
+    log.info(f"Compiling {len(extensions_to_build)}/{len(all_extensions)} Cython modules...")
     
     if not BUILD_DIR.exists():
         os.makedirs(BUILD_DIR, exist_ok=True)
@@ -271,7 +278,29 @@ setup(
         if extensions_to_build:
             run_cmd = [str(python_exe), str(temp_setup)]
             run_cmd.extend(build_args)
-            subprocess.check_call(run_cmd)
+            
+            # Capture Cython compiler output
+            process = subprocess.Popen(
+                run_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                universal_newlines=True
+            )
+            
+            # Log Cython compilation output to build log
+            with open(BUILD_LOG_PATH, 'a') as log_file:
+                log_file.write("\n--- Cython Compilation Output ---\n")
+                for line in process.stdout:
+                    log_file.write(line)
+                    # Only print summary info to console
+                    if "Cythonizing" in line or "warning" in line.lower() or "error" in line.lower():
+                        print(line.strip())
+            
+            # Wait for process to complete
+            ret_code = process.wait()
+            if ret_code != 0:
+                log.error(f"Cython compilation failed with return code {ret_code}")
             
             cache = load_build_cache()
             cache["rebuilt_modules"] = True
@@ -287,11 +316,11 @@ setup(
 def check_wheel_rebuild_needed(extensions_changed, force=False):
     """Check if wheel package needs to be rebuilt."""
     if force:
-        print("Force rebuild requested. Rebuilding wheel package.")
+        log.info("Force rebuild requested. Rebuilding wheel package.")
         return True
         
     if extensions_changed:
-        print("Cython extensions were rebuilt. Rebuilding wheel package.")
+        log.info("Cython extensions were rebuilt. Rebuilding wheel package.")
         return True
         
     cache = load_build_cache()
@@ -327,7 +356,7 @@ def check_wheel_rebuild_needed(extensions_changed, force=False):
                 cache["files"][str(py_file)] = current_hash
                 continue
                 
-            print(f"File {py_file.relative_to(PROJECT_ROOT)} has changed.")
+            log.info(f"File {py_file.relative_to(PROJECT_ROOT)} has changed.")
             cache["files"][str(py_file)] = current_hash
             py_files_changed = True
     
@@ -341,7 +370,7 @@ def check_wheel_rebuild_needed(extensions_changed, force=False):
             if last_build_time and setup_py.stat().st_mtime < last_build_time.timestamp():
                 cache["files"][str(setup_py)] = current_hash
             else:
-                print("setup.py has changed. Rebuilding wheel package.")
+                log.info("setup.py has changed. Rebuilding wheel package.")
                 cache["files"][str(setup_py)] = current_hash
                 py_files_changed = True
     
@@ -350,129 +379,188 @@ def check_wheel_rebuild_needed(extensions_changed, force=False):
     
     return py_files_changed
 
-def build_engine(python_exe):
-    """Build the Ares Engine package."""
-    print(f"Using Python: {python_exe}")
+def build_engine(python_exe, force=False, output_dir=None):
+    """Build the Ares Engine package.
+    
+    Args:
+        python_exe: Path to the Python executable to use
+        force: Whether to force rebuilding all modules
+        output_dir: Optional custom output directory
+        
+    Returns:
+        bool: True if build succeeded, False otherwise
+    """
+    log.info(f"Using Python: {python_exe}")
     
     build_start = datetime.datetime.now()
     build_start_time = time.time()
     
-    args = parse_args()
+    # Update the BUILD_DIR to use the specified output directory
+    global BUILD_DIR, CACHE_DIR, BUILD_CACHE_FILE, LOGS_DIR, BUILD_LOG_PATH
+    if output_dir:
+        BUILD_DIR = Path(output_dir)
+        CACHE_DIR = BUILD_DIR / "cache"
+        BUILD_CACHE_FILE = CACHE_DIR / "build_cache.json"
+    
+    # Always ensure logs directory exists
+    os.makedirs(LOGS_DIR, exist_ok=True)
     
     sys.path.insert(0, str(PROJECT_ROOT))
     from ares.config import initialize, build_config, config
     initialize()
-    print("Loaded build configuration")
+    log.info("Loaded build configuration")
     
     _ = config.load("package")
-    print("Loaded package configuration")
+    log.info("Loaded package configuration")
     
     os.makedirs(BUILD_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
     
-    with open(BUILD_LOG_PATH, "a") as log:
-        log.write(f"\n\n--- Build started at {build_start.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+    with open(BUILD_LOG_PATH, "a") as log_file:
+        log_file.write(f"\n\n--- Build started at {build_start.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
     
-    print("Compiling Cython modules...")
+    log.info("Compiling Cython modules...")
     cython_changed = False
-    if not compile_cython_modules(python_exe, args.force):
-        print("Error: Failed to compile Cython modules.")
-        sys.exit(1)
-    else:
-        cache = load_build_cache()
-        if cache.get("rebuilt_modules", False):
-            cython_changed = True
-            cache["rebuilt_modules"] = False
-            save_build_cache(cache)
-    
-    print("Compilation complete. Building packages...")
-    
-    if not check_wheel_rebuild_needed(cython_changed, args.force):
-        print("\nNo changes detected. Skipping wheel and source distribution builds.")
-        
-        wheel_files = list(BUILD_DIR.glob("*.whl"))
-        sdist_files = list(BUILD_DIR.glob("*.tar.gz"))
-        
-        if wheel_files and sdist_files:
-            wheel_file = wheel_files[0]
-            sdist_file = sdist_files[0]
-            wheel_size = os.path.getsize(wheel_file)
-            sdist_size = os.path.getsize(sdist_file)
-            
-            print(f"Using existing wheel package: {wheel_file}")
-            print(f"Size: {format_size(wheel_size)}")
-            print(f"Using existing source distribution: {sdist_file}")
-            print(f"Size: {format_size(sdist_size)}")
+    try:
+        if not compile_cython_modules(python_exe, force):
+            log.error("Error: Failed to compile Cython modules.")
+            # Continue anyway - we'll try to build the wheel
         else:
-            print("Warning: Could not find existing packages. Building new ones.")
-            args.force = True
+            cache = load_build_cache()
+            if cache.get("rebuilt_modules", False):
+                cython_changed = True
+                cache["rebuilt_modules"] = False
+                save_build_cache(cache)
+    except Exception as e:
+        log.error(f"Exception during Cython compilation: {e}")
+        # Continue anyway - we need to build the wheel even if some Cython modules fail
     
-    if args.force or cython_changed or check_wheel_rebuild_needed(cython_changed, args.force):
-        print("\nBuilding wheel package...")
+    log.info("Compilation complete. Building packages...")
+    
+    # Check if wheel rebuild is needed based on changes
+    rebuild_needed = check_wheel_rebuild_needed(cython_changed, force)
+    
+    # Even if no changes detected, check if the wheel exists
+    wheel_files = list(BUILD_DIR.glob("ares-*.whl"))
+    
+    if not rebuild_needed and wheel_files:
+        log.info("\nNo changes detected and wheel exists. Using existing packages.")
+        
+        wheel_file = wheel_files[0]
+        wheel_size = os.path.getsize(wheel_file)
+        
+        log.info(f"Using existing wheel package: {wheel_file}")
+        log.info(f"Size: {format_size(wheel_size)}")
+        
+        # Check for source distribution as well
+        sdist_files = list(BUILD_DIR.glob("ares-*.tar.gz"))
+        if sdist_files:
+            sdist_file = sdist_files[0]
+            sdist_size = os.path.getsize(sdist_file)
+            log.info(f"Using existing source distribution: {sdist_file}")
+            log.info(f"Size: {format_size(sdist_size)}")
+    else:
+        # Need to rebuild - either changes detected, force rebuild, or missing wheel
+        if not wheel_files:
+            log.info("\nWheel package not found. Building new packages.")
+        elif rebuild_needed:
+            log.info("\nChanges detected. Rebuilding packages.")
+            
+        log.info("\nBuilding wheel package...")
         wheel_start_time = time.time()
         wheel_cmd = [str(python_exe), "-m", "pip", "wheel", ".", "-w", str(BUILD_DIR)]
         try:
-            subprocess.run(wheel_cmd, check=True)
+            # Capture pip wheel output
+            process = subprocess.Popen(
+                wheel_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                universal_newlines=True
+            )
             
-            wheel_files = list(BUILD_DIR.glob("*.whl"))
+            # Log pip wheel output
+            with open(BUILD_LOG_PATH, 'a') as log_file:
+                log_file.write("\n--- Wheel Build Output ---\n")
+                for line in process.stdout:
+                    log_file.write(line)
+                    # Only print summary info to console
+                    if "Processing" in line or "Building wheel" in line or "Created wheel" in line:
+                        print(line.strip())
+        
+            # Wait for process to complete
+            ret_code = process.wait()
+            if ret_code != 0:
+                log.error(f"Wheel build failed with return code {ret_code}")
+                return False
+            
+            wheel_files = list(BUILD_DIR.glob("ares-*.whl"))
             if wheel_files:
                 wheel_file = wheel_files[0]
                 wheel_size = os.path.getsize(wheel_file)
-                print(f"Created wheel package: {wheel_file}")
-                print(f"Size: {format_size(wheel_size)}")
+                log.info(f"Created wheel package: {wheel_file}")
+                log.info(f"Size: {format_size(wheel_size)}")
             else:
-                print("Error: Wheel file not found after build.")
-                sys.exit(1)
+                log.error("Error: Wheel file not found after build.")
+                return False
         except subprocess.CalledProcessError as e:
-            print(f"Error building wheel: {e}")
-            sys.exit(1)
+            log.error(f"Error building wheel: {e}")
+            return False
         
-        print("\nBuilding source distribution...")
+        log.info("\nBuilding source distribution...")
         sdist_cmd = [str(python_exe), "setup.py", "sdist", "--dist-dir", str(BUILD_DIR)]
         try:
             subprocess.run(sdist_cmd, check=True)
             
-            sdist_files = list(BUILD_DIR.glob("*.tar.gz"))
+            sdist_files = list(BUILD_DIR.glob("ares-*.tar.gz"))
             if sdist_files:
                 sdist_file = sdist_files[0]
                 sdist_size = os.path.getsize(sdist_file)
-                print(f"Created source distribution: {sdist_file}")
-                print(f"Size: {format_size(sdist_size)}")
+                log.info(f"Created source distribution: {sdist_file}")
+                log.info(f"Size: {format_size(sdist_size)}")
             else:
-                print("Error: Source distribution not found after build.")
-                sys.exit(1)
+                # Don't fail if sdist fails, as long as we have the wheel
+                log.warn("Warning: Source distribution not found after build.")
         except subprocess.CalledProcessError as e:
-            print(f"Error building source distribution: {e}")
-            sys.exit(1)
+            log.warn(f"Warning: Error building source distribution: {e}")
+            # Continue anyway - as long as we have the wheel file
     
     build_end_time = time.time()
     build_duration = build_end_time - build_start_time
     
-    with open(BUILD_LOG_PATH, "a") as log:
-        log.write(f"Build completed at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        log.write(f"Build duration: {format_time(build_duration)}\n")
-        log.write("Build artifacts:\n")
+    # Check one more time to verify success
+    wheel_files = list(BUILD_DIR.glob("ares-*.whl"))
+    if not wheel_files:
+        log.error("Error: Failed to build engine wheel package.")
+        return False
+    
+    with open(BUILD_LOG_PATH, "a") as log_file:
+        log_file.write(f"Build completed at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        log_file.write(f"Build duration: {format_time(build_duration)}\n")
+        log_file.write("Build artifacts:\n")
         wheel_files = list(BUILD_DIR.glob("*.whl"))
         sdist_files = list(BUILD_DIR.glob("*.tar.gz"))
         for file in wheel_files + sdist_files:
-            log.write(f"  - {file.name} ({format_size(os.path.getsize(file))})\n")
+            log_file.write(f"  - {file.name} ({format_size(os.path.getsize(file))})\n")
     
-    print("\n" + "="*50)
-    print(" BUILD SUMMARY ".center(50, "="))
-    print("="*50)
-    print(f"Build time:      {format_time(build_duration)}")
-    print(f"Build log:       {BUILD_LOG_PATH}")
-    print("Build artifacts:")
+    log.info("\n" + "="*50)
+    log.info(" BUILD SUMMARY ".center(50, "="))
+    log.info("="*50)
+    log.info(f"Build time:      {format_time(build_duration)}")
+    log.info(f"Build log:       {BUILD_LOG_PATH}")
+    log.info("Build artifacts:")
     for file in wheel_files + sdist_files:
-        print(f"  - {file.name} ({format_size(os.path.getsize(file))})")
-    print("="*50 + "\n")
+        log.info(f"  - {file.name} ({format_size(os.path.getsize(file))})")
+    log.info("="*50 + "\n")
     
-    print(f"\nBuild completed successfully. Packages available in: {BUILD_DIR}")
-    print("\nTo install the engine, run:")
+    log.info(f"\nBuild completed successfully. Packages available in: {BUILD_DIR}")
+    log.info("\nTo install the engine, run:")
     wheel_file = wheel_files[0].name if wheel_files else "*.whl"
-    print(f"  pip install {BUILD_DIR / wheel_file}\n")
+    log.info(f"  pip install {BUILD_DIR / wheel_file}\n")
     
-    return True
+    # Final verification
+    wheel_files = list(BUILD_DIR.glob("ares-*.whl"))
+    return len(wheel_files) > 0
 
 def parse_args():
     """Parse command-line arguments."""
@@ -481,8 +569,14 @@ def parse_args():
                         help='Path to the Python executable to use for building')
     parser.add_argument('--force', action='store_true',
                         help='Force rebuilding all Cython modules and packages')
+    parser.add_argument('--output-dir', default=BUILD_DIR,
+                        help=f'Directory to output build artifacts (default: {BUILD_DIR})')
     return parser.parse_args()
 
+# Re-add command-line functionality
 if __name__ == "__main__":
     args = parse_args()
-    build_engine(args.python)
+    if build_engine(args.python, args.force, args.output_dir):
+        sys.exit(0)
+    else:
+        sys.exit(1)

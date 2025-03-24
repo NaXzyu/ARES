@@ -1,8 +1,4 @@
-"""
-Configuration manager for Ares Engine.
-
-Provides utilities for working with the INI configuration files.
-"""
+"""Configuration manager for Ares Engine."""
 
 import os
 import configparser
