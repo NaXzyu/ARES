@@ -9,6 +9,7 @@ from ares.config import initialize, project_config, build_config
 from ares.build.build_exe import build_executable
 from ares.utils import log
 from ares.build.clean_build import clean_egg_info
+from ares.build.build_state import BuildState
 
 from ares.config.logging_config import initialize_logging
 initialize_logging()
@@ -66,7 +67,6 @@ def load_project_config(project_path):
                 "onefile": project_config.is_onefile_enabled(),
                 "include_resources": project_config.getboolean("resources", "include_resources", True),
                 "resource_dir_name": project_config.get("resources", "resource_dir_name", "resources"),
-                # Product name now comes from build_config
                 "product_name": build_config.get_product_name()
             }
         else:
@@ -116,8 +116,7 @@ def load_build_config(project_path):
             try:
                 build_config_file = project_config.get_build_config_file()
             except (AttributeError, TypeError):
-                # Fall back to default
-                build_config_file = "build.ini"
+                build_config_file = "build.ini" # Fallback to default
     
     # Check if the specified build config exists in the project directory
     custom_build_config = Path(project_path) / build_config_file
@@ -168,8 +167,23 @@ def build_project(py_exe, project_path, force=False, output_dir=None):
     if output_dir:
         build_dir = Path(output_dir)
     else:
-        # Use product_name instead of hardcoded "project"
         build_dir = BUILD_DIR / product_name
+    
+    # Initialize build state tracker for incremental builds
+    build_state = BuildState(project_source_dir, build_dir, name=product_name)
+    
+    # Check if we need to rebuild
+    should_rebuild, reason = build_state.should_rebuild(config)
+    
+    if not should_rebuild and not force:
+        print(f"No changes detected. Using existing build in {build_dir}")
+        print(f"Use --force to rebuild anyway.")
+        return True
+    
+    if force:
+        print(f"Forcing rebuild of project")
+    else:
+        print(f"Rebuilding project because: {reason}")
     
     print(f"Building project from {project_source_dir} into {build_dir}...")
     os.makedirs(build_dir, exist_ok=True)
@@ -178,7 +192,6 @@ def build_project(py_exe, project_path, force=False, output_dir=None):
     if not verify_engine_availability():
         print("Attempting to build the engine first...")
         try:
-            # Use the build_engine function from the parent module
             from ares.build.build_engine import build_engine
             if not build_engine(py_exe, force, ENGINE_BUILD_DIR):
                 print("Error: Failed to build the engine. Cannot continue with project build.")
@@ -243,6 +256,8 @@ def build_project(py_exe, project_path, force=False, output_dir=None):
         )
 
         if success:
+            # Update build state for incremental builds
+            build_state.mark_successful_build(config)
             print(f"Project built successfully to {build_dir}")
             return True
         else:

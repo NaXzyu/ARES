@@ -10,9 +10,8 @@ from pathlib import Path
 
 def _get_platform_config_dir():
     platform = sys.platform
-    # Remove hardcoded app_name - we'll get this from project_config later
     # Use a generic name for the initial setup, will be replaced by actual product_name
-    config_base = "AresEngine"
+    config_base = "Ares"
 
     if platform.startswith("win"):
         platform_name = "Windows"
@@ -34,7 +33,7 @@ def _get_platform_config_dir():
 
 USER_CONFIG_DIR = _get_platform_config_dir()
 CONFIG_DIR = Path(__file__).resolve().parent
-CONFIG_FILES_DIR = Path(__file__).resolve().parent.parent / "ini"  # Updated from "config_files" to "ini"
+CONFIG_FILES_DIR = Path(__file__).resolve().parent.parent / "ini"
 
 if "ARES_CONFIG_DIR" in os.environ:
     CONFIG_FILES_DIR = Path(os.environ["ARES_CONFIG_DIR"])

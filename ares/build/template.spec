@@ -51,6 +51,24 @@ def collect_ares_files(analysis):
 # Apply our custom collection instead of using collect_all
 collect_ares_files(a)
 
+# Ensure SDL2 DLLs are included
+try:
+    import sdl2dll
+    import os
+    # Fix: Use get_dllpath() instead of get_dll_path()
+    dll_path = sdl2dll.get_dllpath()
+    if os.path.exists(dll_path):
+        print(f"SDL2 DLLs found at {dll_path}")
+        import glob
+        for dll in glob.glob(os.path.join(dll_path, "*.dll")):
+            dll_name = os.path.basename(dll)
+            # Include at both root and in sdl2dll/dll subdirectory for redundancy
+            a.binaries.append((dll_name, dll, 'BINARY'))  # Root level
+            sdl2_subdir = os.path.join("sdl2dll", "dll", dll_name)
+            a.binaries.append((sdl2_subdir, dll, 'BINARY'))  # SDL2 subdirectory
+except ImportError:
+    print("Warning: sdl2dll not found - SDL2 functionality may be limited")
+
 # Add key hidden imports
 a.hiddenimports.extend([
     'sdl2', 'sdl2.ext', 'sdl2.dll',

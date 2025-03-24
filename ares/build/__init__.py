@@ -16,7 +16,8 @@ __all__ = [
     'NinjaCompiler',
     'create_spec_file',
     'create_spec_from_template',
-    'create_runtime_hooks'
+    'create_runtime_hooks',
+    'BuildState',
 ]
 
 # Import key functions to expose at package level
@@ -27,3 +28,4 @@ from ares.build.clean_build import clean_project
 from ares.build.ninja_compiler import NinjaCompiler
 from ares.build.build_template import create_spec_file, create_spec_from_template
 from ares.build.create_hooks import create_runtime_hooks
+from ares.build.build_state import BuildState

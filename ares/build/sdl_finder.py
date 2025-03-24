@@ -17,7 +17,6 @@ def find_sdl2_dlls(python_exe, logger=None):
     
     log("Locating SDL2 libraries...")
     
-    # SDL2 detection script
     sdl2_finder = """
 import os, sys, glob, site
 from pathlib import Path
@@ -25,8 +24,8 @@ from pathlib import Path
 def find_sdl2_dlls():
     # First check if pysdl2-dll package is installed
     try:
-        from sdl2dll import get_dll_path
-        dll_path = get_dll_path()
+        from sdl2dll import get_dllpath
+        dll_path = get_dllpath()
         if os.path.exists(dll_path):
             dlls = glob.glob(os.path.join(dll_path, "*.dll"))
             if dlls:

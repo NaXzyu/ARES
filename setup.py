@@ -185,7 +185,7 @@ Examples:
   py setup.py --build          Build the engine package
   py setup.py --build path     Build a project from specified path
   py setup.py --clean          Clean up build artifacts
-  py setup.py --force          Force rebuild all Cython modules
+  py setup.py --force          Force rebuild all Cython modules and packages
 """
     )
     parser.add_argument('--build', nargs='?', const='engine',
@@ -194,6 +194,7 @@ Examples:
                         help='Clean up build artifacts')
     parser.add_argument('--force', action='store_true',
                         help='Force rebuilding all Cython modules and packages')
+    # Removed the redundant --no-incremental argument
 
     return parser
 
@@ -293,9 +294,8 @@ if __name__ == "__main__":
                     log.info(f"Using previously built engine from: {ENGINE_BUILD_DIR}")
                 
                 # Build a project from the specified path - output_dir is None so it will use dynamic path
+                # Simplified to just pass the force flag directly
                 build_project(py_exe, args.build, args.force)
-            else:
-                log.error(f"Error: Path '{args.build}' not found. Please provide a valid path to a project directory.")
         else:
             log.info("Setting up Ares Engine development environment...")
             py_exe = get_venv_python(skip_setup=False)

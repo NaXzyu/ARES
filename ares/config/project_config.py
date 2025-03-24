@@ -16,7 +16,7 @@ class ProjectConfig(BaseConfig):
         self.set("project", "console", "True")
         self.set("project", "onefile", "True")
         self.set("project", "include_debug_symbols", "False")
-        self.set("project", "build_config_file", "build.ini")  # Add default build config file reference
+        self.set("project", "build_config_file", "build.ini")
         
         # Resources section
         self.set("resources", "include_resources", "True")
