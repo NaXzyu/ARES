@@ -186,7 +186,7 @@ Examples:
   py setup.py             Create/setup virtual environment
   py setup.py --build     Build the engine package
   py setup.py --clean     Clean up build artifacts
-  py setup.py --build --force   Force rebuild all Cython modules
+  py setup.py --force     Force rebuild all Cython modules
 """
     )
     parser.add_argument('--build', action='store_true', help='Build the engine into a distributable package')
@@ -218,7 +218,7 @@ if __name__ == "__main__":
         
         if args.clean:
             clean_project()
-        elif args.build:
+        elif args.build or args.force:
             print("Setting up build environment...")
             py_exe = get_venv_python(skip_setup=True)
             print(f"Running build with '{py_exe}'")
