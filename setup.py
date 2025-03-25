@@ -20,20 +20,11 @@ BUILD_DIR = PROJECT_ROOT / "build"
 ENGINE_BUILD_DIR = BUILD_DIR / "engine"
 LOGS_DIR = PROJECT_ROOT / "logs"
 
-# Initialize logging
-from ares.config.logging_config import initialize_logging
-initialize_logging(LOGS_DIR)
+# Import SimpleLogger which doesn't rely on file logging
+from ares.utils.log import SimpleLogger, simple_logger
 
-# Simple imports for basic functionality
-from ares.utils import log
-
-# Import build modules
-from ares.build.ninja_compiler import NinjaCompiler
-from ares.build.build_project import build_project
-from ares.build.clean_build import clean_project
-
-# Define flag for Ninja extension availability
-HAVE_NINJA_EXT = NinjaCompiler is not None
+# Create a simple logger for early operations
+log = simple_logger
 
 # Package metadata with PyInstaller dependency added through requirements.txt
 METADATA = {
@@ -64,13 +55,8 @@ METADATA = {
     }
 }
 
-# Set up command classes only if we have the Ninja extension
+# Command classes setup will be initialized after determining mode
 cmdclass = {}
-if HAVE_NINJA_EXT and NinjaCompiler is not None:
-    cmdclass["build_ext"] = NinjaCompiler
-
-# Update metadata with command classes
-METADATA["cmdclass"] = cmdclass
 
 def find_python_3_12():
     """Find Python 3.12 installation using the py launcher."""
@@ -194,17 +180,7 @@ Examples:
                         help='Clean up build artifacts')
     parser.add_argument('--force', action='store_true',
                         help='Force rebuilding all Cython modules and packages')
-    # Removed the redundant --no-incremental argument
-
     return parser
-
-def check_engine_built():
-    """Check if the engine has been built properly."""
-    # Check for wheel files - the primary build artifact
-    wheel_files = list(ENGINE_BUILD_DIR.glob("ares-*.whl"))
-    
-    # Consider engine built if wheel files exist
-    return len(wheel_files) > 0
 
 def build_engine(py_exe, force=False):
     """Build the Ares Engine into the engine directory."""
@@ -228,64 +204,82 @@ def build_engine(py_exe, force=False):
         log.error(f"Error building engine: {e}")
         return False
 
-def find_main_script(directory):
-    """Find a Python script with an entry point in the directory.
-    
-    Searches for a file with "if __name__ == '__main__':" to use as the entry point.
-    Falls back to main.py if it exists.
-    
-    This is a local copy of the function to avoid import dependencies during setup.
-    """
-    directory = Path(directory)
-    
-    # First, check for main.py as a convention
-    main_script = directory / "main.py"
-    if (main_script.exists()):
-        return main_script
-    
-    # Look for Python files with entry points
-    entry_point_files = []
-    for py_file in directory.glob("**/*.py"):
-        try:
-            with open(py_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-                if "if __name__ == '__main__':" in content or 'if __name__ == "__main__":' in content:
-                    entry_point_files.append(py_file)
-        except Exception as e:
-            log.error(f"Error reading {py_file}: {e}")
-    
-    # Use the first entry point file found
-    if entry_point_files:
-        # Prefer entry points in the root directory
-        root_entry_points = [f for f in entry_point_files if f.parent == directory]
-        if root_entry_points:
-            return root_entry_points[0]
-        return entry_point_files[0]
-    
-    return None
+# Check if we're running a standard setuptools command
+setuptools_commands = ['egg_info', 'bdist_wheel', 'install', 'develop', 'sdist', 'build_ext']
+is_setuptools_command = len(sys.argv) > 1 and sys.argv[1] in setuptools_commands
 
+# Special case for pip handling setuptools commands
+if is_setuptools_command:
+    # Initialize Ninja command class if available
+    try:
+        from ares.build.ninja_compiler import NinjaCompiler
+        if NinjaCompiler is not None:
+            cmdclass["build_ext"] = NinjaCompiler
+    except ImportError:
+        pass
+    
+    # Update metadata with command classes
+    METADATA["cmdclass"] = cmdclass
+    
+    # For setuptools commands, just call setup() and exit
+    setup(**METADATA)
+    sys.exit(0)
+
+# For our custom commands, use the normal CLI handling
 if __name__ == "__main__":
-    # Check for standard setuptools commands
-    setuptools_commands = ['egg_info', 'bdist_wheel', 'install', 'develop', 'sdist', 'build_ext']
-    if len(sys.argv) > 1 and sys.argv[1] in setuptools_commands:
-        setup(**METADATA)
+    parser = create_parser()
+    args, unknown_args = parser.parse_known_args()
+    
+    # Handle unknown arguments as error
+    if unknown_args:
+        # Pass through to setup() for any setuptools commands we didn't explicitly check for
+        if unknown_args[0] in ['--help', '-h'] or unknown_args[0].startswith('--'):
+            setup(**METADATA)
+            sys.exit(0)
+        else:
+            parser.print_help()
+            print(f"\nError: Unrecognized arguments: {' '.join(unknown_args)}")
+            sys.exit(1)
+    
+    # Special handling for clean mode
+    if args.clean:
+        # When cleaning, just run clean_project directly without initializing logging
+        print("Cleaning up build artifacts...")
+        from ares.build.clean_build import clean_project
+        clean_project()
+        print("Clean up completed!")
     else:
-        # Parse our own arguments for CLI usage
-        parser = create_parser()
-        args = parser.parse_args()
-
-        if args.clean:
-            clean_project()  # Use the imported clean_project function
-        elif args.build or args.force:
+        # For all other modes, initialize real logging and imports
+        from ares.config.logging_config import initialize_logging
+        initialize_logging(LOGS_DIR)
+        
+        # Import modules for non-clean operations
+        from ares.utils import log
+        from ares.utils.build_utils import find_main_script, get_cython_module_dirs
+        from ares.build.build_engine import check_engine_built
+        from ares.build.ninja_compiler import NinjaCompiler
+        from ares.build.build_project import build_project
+        from ares.build.clean_build import clean_project
+        
+        # Define flag for Ninja extension availability for non-clean operations
+        HAVE_NINJA_EXT = NinjaCompiler is not None
+        if HAVE_NINJA_EXT:
+            cmdclass["build_ext"] = NinjaCompiler
+        
+        # Update metadata with command classes
+        METADATA["cmdclass"] = cmdclass
+        
+        # Handle build operations
+        if args.build or args.force:
             log.info("Setting up build environment...")
             py_exe = get_venv_python(skip_setup=True)
-
+            
             if args.build == 'engine' or args.build is None:
                 # Default case: build the engine
                 build_engine(py_exe, args.force)
             elif os.path.exists(args.build):
                 # First ensure the engine is built
-                if not check_engine_built():
+                if not check_engine_built(ENGINE_BUILD_DIR):
                     log.info("Engine not found or incomplete in build directory. Building engine first...")
                     if not build_engine(py_exe, args.force):
                         log.error("Failed to build engine. Cannot build project.")
@@ -293,8 +287,7 @@ if __name__ == "__main__":
                 else:
                     log.info(f"Using previously built engine from: {ENGINE_BUILD_DIR}")
                 
-                # Build a project from the specified path - output_dir is None so it will use dynamic path
-                # Simplified to just pass the force flag directly
+                # Build a project from the specified path
                 build_project(py_exe, args.build, args.force)
         else:
             log.info("Setting up Ares Engine development environment...")

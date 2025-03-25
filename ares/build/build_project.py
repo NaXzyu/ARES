@@ -1,15 +1,15 @@
 """Build script for creating projects that use the Ares engine."""
 
 import os
-import configparser
 from pathlib import Path
 
-from ares.utils.build_utils import find_main_script
+from ares.utils.build_utils import find_main_script, get_cython_module_dirs
 from ares.config import initialize, project_config, build_config
 from ares.build.build_exe import build_executable
 from ares.utils import log
 from ares.build.clean_build import clean_egg_info
 from ares.build.build_state import BuildState
+from ares.config.config_manager import load_project_config, load_build_config
 
 from ares.config.logging_config import initialize_logging
 initialize_logging()
@@ -19,112 +19,6 @@ PROJECT_ROOT = FILE_DIR.parent.parent
 BUILD_DIR = PROJECT_ROOT / "build"
 ENGINE_BUILD_DIR = BUILD_DIR / "engine"
 ENGINE_WHEEL_PATTERN = "ares-*.whl"
-
-def load_project_config(project_path):
-    """Load project configuration, prioritizing local project.ini if it exists."""
-    # Initialize default config first
-    initialize()
-    
-    # Check if the project has its own project.ini
-    local_project_ini = Path(project_path) / "project.ini"
-    
-    if local_project_ini.exists():
-        print("\n== Using project-specific configuration ==")
-        print(f"Location: {local_project_ini}")
-        
-        # Load the local project.ini
-        local_config = configparser.ConfigParser()
-        local_config.read(local_project_ini)
-        
-        # Override the global project_config with local settings
-        # We'll return these settings as a dictionary so we don't modify the global config
-        config_values = {
-            "console": local_config.getboolean("project", "console", fallback=project_config.is_console_enabled()),
-            "onefile": local_config.getboolean("project", "onefile", fallback=project_config.is_onefile_enabled()),
-            "include_resources": local_config.getboolean("resources", "include_resources", 
-                                             fallback=project_config.getboolean("resources", "include_resources", True)),
-            "resource_dir_name": local_config.get("resources", "resource_dir_name", 
-                                      fallback=project_config.get("resources", "resource_dir_name", "resources")),
-            # Get product_name now from build_config instead, but check local project.ini first
-            "product_name": (
-                local_config.get("package", "product_name", fallback=None) 
-                or build_config.get_product_name()
-            )
-        }
-    else:
-        print("\n== Using default project configuration ==")
-        try:
-            # Guard against project_config being None
-            config_path = str(project_config.user_path) if project_config and hasattr(project_config, 'user_path') else "global defaults"
-            print(f"Location: {config_path}")
-        except (AttributeError, TypeError):
-            print("Location: <default configuration>")
-            
-        # Use global settings with safe defaults in case project_config is not fully initialized
-        if project_config and build_config:
-            config_values = {
-                "console": project_config.is_console_enabled(),
-                "onefile": project_config.is_onefile_enabled(),
-                "include_resources": project_config.getboolean("resources", "include_resources", True),
-                "resource_dir_name": project_config.get("resources", "resource_dir_name", "resources"),
-                "product_name": build_config.get_product_name()
-            }
-        else:
-            # Even when configs are not initialized, try to use build_config values as fallback defaults
-            # This makes the defaults consistent with our INI files
-            print("Warning: Project configuration is not initialized. Using default configuration values.")
-            try:
-                # Try to load basic values from build.ini directly if possible
-                from ares.config.config import config
-                build_ini = config.load("build")
-                fallback_product_name = build_ini.get("package", "product_name", "Ares") if build_ini else "Ares"
-            except Exception:
-                # If we can't load from build.ini, use hardcoded fallback that matches build.ini default
-                fallback_product_name = "Ares"
-            
-            config_values = {
-                "console": True,
-                "onefile": True, 
-                "include_resources": True,
-                "resource_dir_name": "resources",
-                "product_name": fallback_product_name
-            }
-        
-    return config_values
-
-# Add this function to load custom build config if specified
-def load_build_config(project_path):
-    """Load build configuration, checking for project-specific references."""
-    from ares.config import initialize, project_config, config
-    
-    initialize()
-    
-    # Check if the project has its own project.ini
-    local_project_ini = Path(project_path) / "project.ini"
-    build_config_file = "build.ini"  # Default
-    
-    if local_project_ini.exists():
-        local_config = configparser.ConfigParser()
-        local_config.read(local_project_ini)
-        
-        # Check for custom build config file
-        if local_config.has_option("project", "build_config_file"):
-            build_config_file = local_config.get("project", "build_config_file")
-    else:
-        # Check if project_config is properly initialized
-        if project_config is not None and hasattr(project_config, 'get_build_config_file'):
-            try:
-                build_config_file = project_config.get_build_config_file()
-            except (AttributeError, TypeError):
-                build_config_file = "build.ini" # Fallback to default
-    
-    # Check if the specified build config exists in the project directory
-    custom_build_config = Path(project_path) / build_config_file
-    if custom_build_config.exists():
-        return config.load(custom_build_config.stem)
-    
-    # Fall back to default build config
-    return config.load("build")
 
 def verify_engine_availability():
     """Verify that the engine has been built."""
@@ -154,10 +48,10 @@ def build_project(py_exe, project_path, force=False, output_dir=None):
         print(f"Error: Project directory not found: {project_path}")
         return False
         
-    # Load custom build configuration if specified
+    # Load custom build configuration if specified - using the centralized function
     custom_build_config = load_build_config(project_source_dir)
 
-    # Load project configuration (either local or default) first to get product_name
+    # Load project configuration - using the centralized function
     config = load_project_config(project_source_dir)
     
     # Use product_name for output directory name if available and no output_dir is specified
@@ -210,7 +104,7 @@ def build_project(py_exe, project_path, force=False, output_dir=None):
         
         # Make sure we're referencing the correct hook_ares.py file
         hook_path = hooks_path / "hook_ares.py"
-        if (hook_path.exists()):
+        if hook_path.exists():
             print(f"Found hook_ares.py at {hook_path}")
         else:
             print(f"Warning: hook_ares.py not found at {hook_path}")

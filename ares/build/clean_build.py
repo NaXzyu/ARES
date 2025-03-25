@@ -6,8 +6,11 @@ import sys
 import shutil
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from ares.utils import log
+# Always use SimpleLogger for clean operations to avoid log file locking issues
+from ares.utils.log import SimpleLogger
+
+# Create a log instance for this module
+log = SimpleLogger()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 LOGS_DIR = PROJECT_ROOT / "logs"
@@ -137,9 +140,7 @@ def clean_egg_info():
             except Exception:
                 pass
 
+# Execute only if run directly
 if __name__ == "__main__":
-    # Initialize logging
-    from ares.config.logging_config import initialize_logging
-    initialize_logging()
-    
+    # No need for complex initialization, always use SimpleLogger
     clean_project()

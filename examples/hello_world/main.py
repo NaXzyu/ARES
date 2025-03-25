@@ -9,7 +9,7 @@ def main():
     window.show()
     
     # Setup input handling
-    input_handler = Input()
+    input = Input()
     
     # Simple main loop
     while window.running:
@@ -18,10 +18,10 @@ def main():
             break
             
         # Update input state
-        input_handler.update()
+        input.update()
         
         # Check for escape key to exit
-        if input_handler.is_key_pressed(sdl2.SDL_SCANCODE_ESCAPE):
+        if input.is_key_pressed(sdl2.SDL_SCANCODE_ESCAPE):
             break
         
         # Draw the frame

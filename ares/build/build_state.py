@@ -2,11 +2,11 @@
 
 import os
 import json
-import hashlib
 import time
 from pathlib import Path
 
 from ares.utils import log
+from ares.utils.build_utils import compute_file_hash, hash_config
 
 class BuildState:
     """Tracks the state of a build to enable incremental builds."""
@@ -59,24 +59,6 @@ class BuildState:
             log.error(f"Failed to save build state: {e}")
             return False
     
-    def _hash_file(self, filepath):
-        """Compute MD5 hash of a file."""
-        try:
-            hash_md5 = hashlib.md5()
-            with open(filepath, "rb") as f:
-                for chunk in iter(lambda: f.read(4096), b""):
-                    hash_md5.update(chunk)
-            return hash_md5.hexdigest()
-        except IOError:
-            return ""
-    
-    def _hash_config(self, config):
-        """Hash a configuration dictionary."""
-        if not config:
-            return ""
-        config_str = json.dumps(config, sort_keys=True)
-        return hashlib.md5(config_str.encode()).hexdigest()
-    
     def update_file_hashes(self):
         """Update hashes for all relevant files in the project."""
         new_hashes = {}
@@ -86,14 +68,12 @@ class BuildState:
             for file_path in self.project_dir.glob(pattern):
                 if file_path.is_file():
                     rel_path = file_path.relative_to(self.project_dir)
-                    new_hashes[str(rel_path)] = self._hash_file(file_path)
+                    file_hash = compute_file_hash(file_path)
+                    if file_hash:  # Only add if hash was computed successfully
+                        new_hashes[str(rel_path)] = file_hash
         
         self.state["file_hashes"] = new_hashes
         self.state["last_build_time"] = time.time()
-    
-    def update_config_hash(self, config):
-        """Update the hash of the build configuration."""
-        self.state["build_config_hash"] = self._hash_config(config)
     
     def should_rebuild(self, config=None):
         """Determine if a rebuild is necessary based on file or config changes.
@@ -110,7 +90,7 @@ class BuildState:
         
         # Check if build configuration has changed
         if config:
-            current_config_hash = self._hash_config(config)
+            current_config_hash = hash_config(config)
             previous_config_hash = self.state.get("build_config_hash", "")
             if current_config_hash != previous_config_hash:
                 return True, "Build configuration has changed"
@@ -121,8 +101,9 @@ class BuildState:
             for file_path in self.project_dir.glob(pattern):
                 if file_path.is_file():
                     rel_path = str(file_path.relative_to(self.project_dir))
+                    current_hash = compute_file_hash(file_path)
                     if (rel_path not in previous_hashes or
-                            previous_hashes[rel_path] != self._hash_file(file_path)):
+                            previous_hashes[rel_path] != current_hash):
                         return True, f"File changed: {rel_path}"
         
         # Check for deleted files
@@ -149,5 +130,5 @@ class BuildState:
         """Mark the current build as successful and update state."""
         self.update_file_hashes()
         if config:
-            self.update_config_hash(config)
+            self.state["build_config_hash"] = hash_config(config)
         self.save_state()

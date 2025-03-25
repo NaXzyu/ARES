@@ -16,6 +16,7 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 
 sys.path.insert(0, str(PROJECT_ROOT))
 from ares.utils.utils import format_size, format_time
+from ares.utils.build_utils import find_cython_binaries
 from ares.build.sdl_finder import find_sdl2_dlls
 from ares.build.build_template import create_spec_file, create_spec_from_template
 from ares.build.create_hooks import create_runtime_hooks
@@ -64,37 +65,6 @@ class ExecutableBuilder:
             timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             log_file.write(f"[{timestamp}] {message}\n")
 
-    def find_cython_binaries(self):
-        """Find all compiled Cython modules and Python files in the ares package."""
-        binaries = []
-        
-        # Include the entire 'ares' package instead of selective modules
-        ares_root = PROJECT_ROOT / "ares"
-        
-        # Walk through the entire module structure
-        for root, dirs, files in os.walk(ares_root):
-            for file in files:
-                # Skip __pycache__ directories
-                if "__pycache__" in root:
-                    continue
-                    
-                # Get relative path from ares root to create proper destination
-                rel_path = os.path.relpath(root, PROJECT_ROOT)
-                dest_dir = rel_path.replace("\\", "/")  # Normalize path separators
-                
-                # Full path to the file
-                file_path = Path(root) / file
-                
-                # Include Python files and compiled extensions
-                if (file.endswith('.py') or 
-                    file.endswith('.pyd') or 
-                    file.endswith('.so') or
-                    file.endswith('.ini')):
-                    binaries.append((str(file_path), dest_dir))
-                    self.log(f"Including module file: {file_path} -> {dest_dir}")
-        
-        return binaries
-
     def build(self):
         """Build the executable using PyInstaller."""
         # Clean any potentially locked egg-info directories
@@ -133,8 +103,8 @@ class ExecutableBuilder:
         # Find SDL2 DLLs - call the imported function directly
         binaries = find_sdl2_dlls(self.python_exe, self.log)
         
-        # Find Cython binaries
-        cython_binaries = self.find_cython_binaries()
+        # Find Cython binaries - use the imported function directly
+        cython_binaries = find_cython_binaries(PROJECT_ROOT, self.log)
         binaries.extend(cython_binaries)
         
         # Create runtime hooks (using our new module)
