@@ -12,7 +12,7 @@ class BuildConfig(BaseConfig):
         self._create_default_config()
         
     def _create_default_config(self):
-        # Package section (consolidated from former packager and package sections)
+        # Package section
         self.set("package", "include_debug_files", "False")
         self.set("package", "create_installer", "True")
         self.set("package", "compression_level", "9")
@@ -44,8 +44,6 @@ class BuildConfig(BaseConfig):
         self.set("version", "build", "auto")
         
         # Build section
-        self.set("build", "use_ninja", "True")
-        self.set("build", "optimize", "3")
         self.set("build", "parallel", "True")
         self.set("build", "inplace", "True")
         self.set("build", "package_config", "package")
@@ -55,34 +53,6 @@ class BuildConfig(BaseConfig):
         self.set("cython", "boundscheck", "False")
         self.set("cython", "wraparound", "False")
         self.set("cython", "cdivision", "True")
-    
-    def get_compiler_flags(self):  
-        flags = []
-        
-        opt_level = self.get("compiler", "optimization_level", "O2")
-        if os.name == 'nt':
-            if opt_level == "O0":
-                flags.append("/Od")
-            elif opt_level == "O1":
-                flags.append("/O1")
-            elif opt_level == "O3":
-                flags.append("/Ox")
-            else:
-                flags.append("/O2")
-                
-            if self.getboolean("compiler", "debug_symbols", False):
-                flags.append("/Zi")
-        else:
-            flags.append(f"-{opt_level}")
-            
-            if self.getboolean("compiler", "debug_symbols", False):
-                flags.append("-g")
-        
-        additional = self.get("compiler", "additional_flags", "")
-        if additional:
-            flags.extend(additional.split())
-        
-        return flags
     
     def get_version_string(self):
         major = self.getint("version", "major", 0)
@@ -98,8 +68,8 @@ class BuildConfig(BaseConfig):
     
     def get_package_data_config(self):
         return self.get("build", "package_config", "package")
-        
-    # Simplified helper methods for the package properties - no need to check multiple sections anymore
+    
+    # Helper methods for package properties
     def get_company_name(self):
         """Get the company name for the project."""
         return self.get("package", "company_name", "Ares Engine")

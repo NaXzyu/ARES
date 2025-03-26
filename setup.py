@@ -59,21 +59,91 @@ METADATA = {
 cmdclass = {}
 
 def find_python_3_12():
-    """Find Python 3.12 installation using the py launcher."""
-    try:
-        output = subprocess.check_output(["py", "-0p"], text=True)
-        for line in output.splitlines():
-            line = line.strip()
-            match = re.match(r"^-V:3\.12(?:-64|-32)?\s+(\S+)", line)
-            if match:
-                python_path = Path(match.group(1))
+    """Find Python 3.12 installation by trying multiple Python command names."""
+    # Try different Python command names in order of preference
+    python_commands = ["py", "python", "python3", "python3.12", "py3", "py3.12"]
+    
+    # First try the py launcher which gives version info
+    if os.name == 'nt':  # Windows-specific approach using py launcher
+        try:
+            output = subprocess.check_output(["py", "-0p"], text=True)
+            for line in output.splitlines():
+                line = line.strip()
+                match = re.match(r"^-V:3\.12(?:-64|-32)?\s+(\S+)", line)
+                if match:
+                    python_path = Path(match.group(1))
+                    log.info(f"Found Python 3.12 at: {python_path}")
+                    return python_path
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            log.debug("Windows py launcher not available or failed.")
+    
+    # Try each command systematically
+    for cmd in python_commands:
+        try:
+            # Check if command exists and get its version
+            output = subprocess.check_output(
+                [cmd, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], 
+                text=True,
+                stderr=subprocess.DEVNULL
+            )
+            version = output.strip()
+            
+            # If it's Python 3.12, return the full path
+            if version == "3.12":
+                # Get the full path to the Python executable
+                if os.name == 'nt':
+                    output = subprocess.check_output(
+                        [cmd, "-c", "import sys; print(sys.executable)"], 
+                        text=True
+                    )
+                else:
+                    output = subprocess.check_output(
+                        ["which", cmd], 
+                        text=True
+                    )
+                python_path = Path(output.strip())
                 log.info(f"Found Python 3.12 at: {python_path}")
                 return python_path
-        log.warn("Python 3.12 not found.")
-        return None
-    except subprocess.CalledProcessError as e:
-        log.error(f"Error executing 'py -0p': {e}")
-        return None
+            else:
+                log.debug(f"Found Python {version} at {cmd}, but need 3.12")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            log.debug(f"Command '{cmd}' not found or failed.")
+    
+    # If nothing found, check user input
+    log.warn("Python 3.12 not found in PATH. Please enter the path to Python 3.12 manually.")
+    if os.name == 'nt':
+        log.warn("Example paths: C:\\Python312\\python.exe, C:\\Program Files\\Python312\\python.exe")
+    else:
+        log.warn("Example paths: /usr/bin/python3.12, /usr/local/bin/python3.12")
+    
+    # After 3 attempts, give up
+    for i in range(3):
+        path_input = input("Path to Python 3.12 executable (or press Enter to skip): ").strip()
+        if not path_input:
+            break
+            
+        try:
+            python_path = Path(path_input)
+            if not python_path.exists():
+                log.error(f"The specified path does not exist: {python_path}")
+                continue
+                
+            # Verify it's Python 3.12
+            output = subprocess.check_output(
+                [str(python_path), "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+                text=True
+            )
+            version = output.strip()
+            if version == "3.12":
+                log.info(f"Using Python 3.12 at: {python_path}")
+                return python_path
+            else:
+                log.error(f"The specified path is Python {version}, not 3.12: {python_path}")
+        except Exception as e:
+            log.error(f"Error verifying Python path: {e}")
+    
+    log.error("Python 3.12 is required but could not be found.")
+    return None
 
 def check_python_version(python_path, required_version=(3, 12)):
     """Check if the Python interpreter meets the version requirements."""
@@ -293,8 +363,8 @@ if __name__ == "__main__":
             log.info("Setting up Ares Engine development environment...")
             py_exe = get_venv_python(skip_setup=False)
             log.info("\nAres Engine development environment is ready!")
-            log.info("To build the engine, run: py setup.py --build")
-            log.info("To build a project, run: py setup.py --build path/to/project")
+            log.info("To build the engine, run: python setup.py --build")
+            log.info("To build a project, run: python setup.py --build path/to/project")
 else:
     # This only runs when the script is imported, not when run directly
     setup(**METADATA)
