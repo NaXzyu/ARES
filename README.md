@@ -130,5 +130,5 @@ Please use the following BibTeX entry to cite this dataset:
 
 For questions or support, please contact us at:
 
-- **Email**: <rawsonkara@gmail.com>
+- **Email**: <backrqqms@gmail.com>
 - **Discord**: [Join our Discord](https://discord.gg/2xpqjDUkHD)
