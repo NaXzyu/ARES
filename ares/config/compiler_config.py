@@ -26,35 +26,34 @@ class CompilerConfig(BaseConfig):
         
         # Compiler flags section
         self.set("compiler_flags", "common", "-O2")
-        self.set("compiler_flags", "windows", "/O2 /favor:AMD64 /DWIN64")
-        self.set("compiler_flags", "unix", "-march=native")
+        self.set("compiler_flags", "windows", "/O2 /favor:AMD64 /DWIN64 /EHsc /MP")
+        self.set("compiler_flags", "unix", "-march=native -ffast-math -Wall")
     
     def get_compiler_flags(self):
         """Get compiler flags based on the current platform and settings."""  
         flags = []
         
-        opt_level = self.get("compiler", "optimization_level", "O2")
-        if os.name == 'nt':
-            if opt_level == "O0":
-                flags.append("/Od")
-            elif opt_level == "O1":
-                flags.append("/O1")
-            elif opt_level == "O3":
-                flags.append("/Ox")
-            else:
-                flags.append("/O2")
-                
-            if self.getboolean("compiler", "debug_symbols", False):
-                flags.append("/Zi")
-        else:
-            flags.append(f"-{opt_level}")
-            
-            if self.getboolean("compiler", "debug_symbols", False):
-                flags.append("-g")
+        # First add common flags as base
+        common_flags = self.get("compiler_flags", "common", "")
+        if common_flags:
+            flags.extend(common_flags.split())
         
-        additional = self.get("compiler", "additional_flags", "")
-        if additional:
-            flags.extend(additional.split())
+        # Then add platform-specific flags
+        if os.name == 'nt':
+            platform_flags = self.get("compiler_flags", "windows", "")
+            if platform_flags:
+                flags.extend(platform_flags.split())
+        else:
+            platform_flags = self.get("compiler_flags", "unix", "")
+            if platform_flags:
+                flags.extend(platform_flags.split())
+        
+        # Add any debug symbols if needed
+        if self.getboolean("compiler", "debug_symbols", False):
+            if os.name == 'nt':
+                flags.append("/Zi")
+            else:
+                flags.append("-g")
         
         return flags
     
@@ -71,16 +70,16 @@ class CompilerConfig(BaseConfig):
         return self.getint("compiler", "optimize", 3)
     
     def is_lto_enabled(self):
-        """Check if link-time optimization is enabled."""
+        """Check if link-time optimization is enabled.""" 
         return self.getboolean("compiler", "enable_lto", True)
     
     def get_include_dirs(self):
-        """Get additional include directories."""
+        """Get additional include directories.""" 
         dirs = self.get("compiler", "include_dirs", "")
         return [dir.strip() for dir in dirs.split(",")] if dirs else []
     
     def get_library_dirs(self):
-        """Get additional library directories."""
+        """Get additional library directories.""" 
         dirs = self.get("compiler", "library_dirs", "")
         return [dir.strip() for dir in dirs.split(",")] if dirs else []
 

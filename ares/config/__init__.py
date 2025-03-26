@@ -4,6 +4,8 @@ Configuration module for the Ares Engine.
 This module provides configuration settings and management for the engine.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 import os
 
@@ -34,8 +36,12 @@ package_config = PackageConfig()
 # Flag to track initialization status
 _initialized = False
 
-def initialize():
-    """Initialize the configuration system."""
+def initialize() -> bool:
+    """Initialize the configuration system.
+    
+    Returns:
+        bool: True if initialization was successful
+    """
     global _initialized
     
     if not _initialized:
@@ -60,5 +66,6 @@ if not _initialized:
 __all__ = [
     'config', 'get_config', 
     'engine_config', 'build_config', 'project_config', 'package_config', 'compiler_config',
-    'initialize', 'initialize_configuration', 'get_app_config_dir'
+    'initialize', 'initialize_configuration', 'get_app_config_dir',
+    'PROJECT_ROOT', 'DEFAULT_CONFIG_DIR', 'USER_CONFIG_DIR', 'CONFIG_FILES_DIR'
 ]

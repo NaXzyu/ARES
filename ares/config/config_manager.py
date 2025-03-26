@@ -106,7 +106,7 @@ def load_project_config(project_path):
     Returns:
         dict: Dictionary of project configuration values
     """
-    from ares.config import initialize, project_config, build_config
+    from ares.config import initialize, project_config
     # Initialize default config first
     initialize()
     
@@ -121,61 +121,29 @@ def load_project_config(project_path):
         local_config = configparser.ConfigParser()
         local_config.read(local_project_ini)
         
-        # Override the global project_config with local settings
-        # We'll return these settings as a dictionary so we don't modify the global config
-        config_values = {
+        # Build configuration values from local project.ini with fallbacks to global config
+        return {
             "console": local_config.getboolean("project", "console", fallback=project_config.is_console_enabled()),
             "onefile": local_config.getboolean("project", "onefile", fallback=project_config.is_onefile_enabled()),
             "include_resources": local_config.getboolean("resources", "include_resources", 
-                                             fallback=project_config.getboolean("resources", "include_resources", True)),
+                                            fallback=project_config.getboolean("resources", "include_resources", True)),
             "resource_dir_name": local_config.get("resources", "resource_dir_name", 
-                                      fallback=project_config.get("resources", "resource_dir_name", "resources")),
-            # Get product_name now from build_config instead, but check local project.ini first
-            "product_name": (
-                local_config.get("package", "product_name", fallback=None) 
-                or build_config.get_product_name()
-            )
+                                     fallback=project_config.get("resources", "resource_dir_name", "resources")),
+            "product_name": local_config.get("project", "product_name", 
+                                fallback=project_config.get_product_name())
         }
     else:
+        # Use default engine configuration
         print("\n== Using default project configuration ==")
-        try:
-            # Guard against project_config being None
-            config_path = str(project_config.user_path) if project_config and hasattr(project_config, 'user_path') else "global defaults"
-            print(f"Location: {config_path}")
-        except (AttributeError, TypeError):
-            print("Location: <default configuration>")
-            
-        # Use global settings with safe defaults in case project_config is not fully initialized
-        if project_config and build_config:
-            config_values = {
-                "console": project_config.is_console_enabled(),
-                "onefile": project_config.is_onefile_enabled(),
-                "include_resources": project_config.getboolean("resources", "include_resources", True),
-                "resource_dir_name": project_config.get("resources", "resource_dir_name", "resources"),
-                "product_name": build_config.get_product_name()
-            }
-        else:
-            # Even when configs are not initialized, try to use build_config values as fallback defaults
-            # This makes the defaults consistent with our INI files
-            print("Warning: Project configuration is not initialized. Using default configuration values.")
-            try:
-                # Try to load basic values from build.ini directly if possible
-                from ares.config.config import config
-                build_ini = config.load("build")
-                fallback_product_name = build_ini.get("package", "product_name", "Ares") if build_ini else "Ares"
-            except Exception:
-                # If we can't load from build.ini, use hardcoded fallback that matches build.ini default
-                fallback_product_name = "Ares"
-            
-            config_values = {
-                "console": True,
-                "onefile": True, 
-                "include_resources": True,
-                "resource_dir_name": "resources",
-                "product_name": fallback_product_name
-            }
+        print(f"Location: {getattr(project_config, 'user_path', 'built-in defaults')}")
         
-    return config_values
+        return {
+            "console": project_config.is_console_enabled(),
+            "onefile": project_config.is_onefile_enabled(),
+            "include_resources": project_config.getboolean("resources", "include_resources", True),
+            "resource_dir_name": project_config.get("resources", "resource_dir_name", "resources"),
+            "product_name": project_config.get_product_name()
+        }
 
 def load_build_config(project_path):
     """Load build configuration, checking for project-specific references.

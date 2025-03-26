@@ -22,11 +22,10 @@ def compile_cython_modules(python_exe, project_root, build_dir, build_log_path, 
     Returns:
         bool: True if compilation succeeded, False otherwise
     """
-    from setuptools import setup
     from Cython.Build import cythonize
     
     sys.path.insert(0, str(project_root))
-    from ares.config import initialize, build_config
+    from ares.config import initialize, build_config, compiler_config
     initialize()
     
     compiler_directives = {
@@ -36,28 +35,18 @@ def compile_cython_modules(python_exe, project_root, build_dir, build_log_path, 
         'cdivision': build_config.getboolean("cython", "cdivision", True),
     }
     
-    optimization = build_config.get("compiler", "optimization_level", "O2")
     inplace = build_config.getboolean("build", "inplace", True)
     
     old_argv = sys.argv.copy()
     
-    if os.name == 'nt':
-        if optimization == "O0":
-            opt_flag = "/Od"
-        elif optimization == "O1":
-            opt_flag = "/O1"
-        elif optimization == "O3":
-            opt_flag = "/Ox"
-        else:
-            opt_flag = "/O2"
-    else:
-        opt_flag = f"-{optimization}"
+    # Use compiler_config.get_compiler_flags() to get flags in a consistent way
+    compiler_flags = compiler_config.get_compiler_flags()
     
     build_args = ['build_ext']
     if inplace:
         build_args.append('--inplace')
     
-    all_extensions = get_extensions(project_root, extra_compile_args=[opt_flag])
+    all_extensions = get_extensions(project_root, extra_compile_args=compiler_flags)
     
     extensions_to_build = check_file_changes(all_extensions, project_root, build_dir, force)
     
@@ -76,7 +65,6 @@ def compile_cython_modules(python_exe, project_root, build_dir, build_log_path, 
             f.write("""
 from setuptools import setup
 from Cython.Build import cythonize
-import sys
 from setuptools.extension import Extension
 
 ext_modules = []

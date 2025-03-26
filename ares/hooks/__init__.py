@@ -1,8 +1,11 @@
 """
-Runtime hooks for PyInstaller.
+PyInstaller hooks for the Ares Engine.
 
-These hooks ensure proper operation of Ares Engine components in frozen applications:
-- hook_sdl2.py: SDL2 library loading
-- hook_cython_modules.py: Extension module loading
-- hook_runtime_logging.py: Logging configuration and output capture
+These hooks ensure that all required modules and resources are included when freezing applications.
 """
+
+from __future__ import annotations
+
+# Nothing to import directly from this module, it's mainly for PyInstaller hooks
+
+__all__ = []

@@ -2,7 +2,6 @@
 Build configuration settings for the Ares Engine project.
 """
 
-import os
 from .base_config import BaseConfig
 
 class BuildConfig(BaseConfig):
@@ -21,9 +20,6 @@ class BuildConfig(BaseConfig):
         self.set("package", "target_platform", "auto")
         self.set("package", "splash_screen", "ares/assets/images/splash.png")
         self.set("package", "add_version_info", "True")
-        self.set("package", "company_name", "Ares Engine")
-        self.set("package", "product_name", "Ares")
-        self.set("package", "file_description", "Game built with Ares Engine")
         self.set("package", "version_file", "False")
         
         # Assets section
@@ -68,16 +64,3 @@ class BuildConfig(BaseConfig):
     
     def get_package_data_config(self):
         return self.get("build", "package_config", "package")
-    
-    # Helper methods for package properties
-    def get_company_name(self):
-        """Get the company name for the project."""
-        return self.get("package", "company_name", "Ares Engine")
-    
-    def get_product_name(self):
-        """Get the product name for the project."""
-        return self.get("package", "product_name", "Ares")
-        
-    def get_file_description(self):
-        """Get the file description for the project."""
-        return self.get("package", "file_description", "Game built with Ares Engine")

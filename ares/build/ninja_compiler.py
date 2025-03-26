@@ -4,7 +4,6 @@ Custom build_ext command that supports Ninja for faster builds.
 """
 
 import sys
-import os
 from pathlib import Path
 from setuptools.command.build_ext import build_ext
 
@@ -17,7 +16,7 @@ class NinjaCompiler(build_ext):
         
         try:
             sys.path.insert(0, str(PROJECT_ROOT))
-            from ares.config import initialize, build_config, config
+            from ares.config import initialize, build_config, compiler_config
             initialize()
             
             # Check if we should use Ninja
@@ -30,22 +29,14 @@ class NinjaCompiler(build_ext):
             else:
                 self.parallel = build_config.getint("compiler", "parallel_jobs", 4) > 1
             
-            # Load compiler flags from compiler.ini instead of package.ini
-            compiler_config = config.load("compiler")
-            if compiler_config and compiler_config.has_section("compiler_flags"):
-                if os.name == 'nt' and compiler_config.has_option("compiler_flags", "windows"):
-                    compiler_flags = compiler_config.get("compiler_flags", "windows")
-                    if compiler_flags:
-                        self._compiler_flags = compiler_flags.split()
-                elif os.name != 'nt' and compiler_config.has_option("compiler_flags", "unix"):
-                    compiler_flags = compiler_config.get("compiler_flags", "unix")
-                    if compiler_flags:
-                        self._compiler_flags = compiler_flags.split()
+            # Use compiler_config.get_compiler_flags() to get flags in a consistent way
+            self._compiler_flags = compiler_config.get_compiler_flags()
+            
         except (ImportError, AttributeError):
             self.parallel = False
             
     def build_extensions(self):
-        # Apply compiler flags from package.ini if available
+        # Apply compiler flags if available
         if hasattr(self, '_compiler_flags') and self._compiler_flags:
             for ext in self.extensions:
                 if not hasattr(ext, 'extra_compile_args') or ext.extra_compile_args is None:
