@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Build script for Ares Engine package and executable."""
 
-import os
-import sys
-import subprocess
-import time
-import datetime
 import argparse
-import json
+import datetime
+import os
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 FILE_DIR = Path(__file__).resolve().parent
@@ -23,16 +23,21 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Import logging after path setup
 from ares.utils import log
 from ares.utils.utils import format_size, format_time
-from ares.utils.build_utils import get_cython_module_dirs, compute_file_hash
-from ares.config.logging_config import initialize_logging
-from ares.build.cython_compiler import compile_cython_modules, check_compiled_modules
+from ares.utils.build_utils import compute_file_hash
+from ares.build.cython_compiler import compile_cython_modules
 from ares.build.build_cache import load_build_cache, save_build_cache, set_cache_paths
 
-# Initialize logging
-initialize_logging(LOGS_DIR)
-
 def check_wheel_rebuild_needed(extensions_changed, force=False):
-    """Check if wheel package needs to be rebuilt."""
+    """
+    Determine if wheel rebuild is needed.
+
+    Args:
+        extensions_changed (bool): True if Cython extensions have changed.
+        force (bool): True to force a rebuild.
+
+    Returns:
+        bool: True if the wheel should be rebuilt.
+    """
     if force:
         log.info("Force rebuild requested. Rebuilding wheel package.")
         return True
@@ -68,7 +73,7 @@ def check_wheel_rebuild_needed(extensions_changed, force=False):
         cached_hash = cache["files"].get(str(py_file), None)
         
         if cached_hash != current_hash:
-            # If we have stat info, verify file was actually modified after last build
+            # Verify file modified after last build
             if last_build_time and py_file.stat().st_mtime < last_build_time.timestamp():
                 # File is older than last build but hash changed - update cache without rebuild
                 cache["files"][str(py_file)] = current_hash
@@ -89,7 +94,6 @@ def check_wheel_rebuild_needed(extensions_changed, force=False):
                 cache["files"][str(setup_py)] = current_hash
             else:
                 log.info("setup.py has changed. Rebuilding wheel package.")
-                cache["files"][str(setup_py)] = current_hash
                 py_files_changed = True
     
     # Save the updated cache
@@ -97,16 +101,18 @@ def check_wheel_rebuild_needed(extensions_changed, force=False):
     
     return py_files_changed
 
-def build_engine(python_exe, force=False, output_dir=None):
-    """Build the Ares Engine package.
-    
+def build_engine(python_exe, force, output_dir, configs):
+    """
+    Build the Ares Engine package.
+
     Args:
-        python_exe: Path to the Python executable to use
-        force: Whether to force rebuilding all modules
-        output_dir: Optional custom output directory
-        
+        python_exe (str): Python executable path.
+        force (bool): Force rebuild of modules.
+        output_dir (str): Directory where build artifacts will be placed.
+        configs (dict): Configuration objects dictionary from ConfigManager.
+
     Returns:
-        bool: True if build succeeded, False otherwise
+        bool: True if build succeeds, False otherwise.
     """
     log.info(f"Using Python: {python_exe}")
     
@@ -115,20 +121,23 @@ def build_engine(python_exe, force=False, output_dir=None):
     
     # Update the BUILD_DIR to use the specified output directory
     global BUILD_DIR, CACHE_DIR, BUILD_CACHE_FILE, LOGS_DIR, BUILD_LOG_PATH
-    if output_dir:
-        BUILD_DIR = Path(output_dir)
-        CACHE_DIR, BUILD_CACHE_FILE = set_cache_paths(BUILD_DIR)
+    BUILD_DIR = Path(output_dir)
+    CACHE_DIR, BUILD_CACHE_FILE = set_cache_paths(BUILD_DIR)
     
     # Always ensure logs directory exists
     os.makedirs(LOGS_DIR, exist_ok=True)
     
     sys.path.insert(0, str(PROJECT_ROOT))
-    from ares.config import initialize, build_config, config
-    initialize()
-    log.info("Loaded build configuration")
     
-    _ = config.load("package")
-    log.info("Loaded package configuration")
+    # We can use the configs directly without extraction since they're already loaded with overrides
+    log.info("Using provided build configuration")
+    
+    # Use the configs dictionary directly - note that we're using ConfigType enum for access
+    from ares.config.config_types import ConfigType
+    package_data = configs[ConfigType.PACKAGE].get_package_data()
+    log.info(f"Loaded package configuration with {len(package_data)} package data entries")
+    package_extensions = configs[ConfigType.PACKAGE].get_extensions()
+    log.info(f"Found {len(package_extensions)} extension modules in package config")
     
     os.makedirs(BUILD_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -138,19 +147,16 @@ def build_engine(python_exe, force=False, output_dir=None):
     
     log.info("Compiling Cython modules...")
     cython_changed = False
-    try:
-        if not compile_cython_modules(python_exe, PROJECT_ROOT, BUILD_DIR, BUILD_LOG_PATH, force):
-            log.error("Error: Failed to compile Cython modules.")
-            # Continue anyway - we'll try to build the wheel
-        else:
-            cache = load_build_cache(BUILD_CACHE_FILE)
-            if cache.get("rebuilt_modules", False):
-                cython_changed = True
-                cache["rebuilt_modules"] = False
-                save_build_cache(cache, BUILD_CACHE_FILE, CACHE_DIR)
-    except Exception as e:
-        log.error(f"Exception during Cython compilation: {e}")
-        # Continue anyway - we need to build the wheel even if some Cython modules fail
+    
+    if not compile_cython_modules(python_exe, PROJECT_ROOT, BUILD_DIR, BUILD_LOG_PATH, force):
+        log.error("Error: Failed to compile Cython modules.")
+        raise RuntimeError("Failed to compile Cython modules. Cannot continue with build.")
+    
+    cache = load_build_cache(BUILD_CACHE_FILE)
+    if cache.get("rebuilt_modules", False):
+        cython_changed = True
+        cache["rebuilt_modules"] = False
+        save_build_cache(cache, BUILD_CACHE_FILE, CACHE_DIR)
     
     log.info("Compilation complete. Building packages...")
     
@@ -184,7 +190,6 @@ def build_engine(python_exe, force=False, output_dir=None):
             log.info("\nChanges detected. Rebuilding packages.")
             
         log.info("\nBuilding wheel package...")
-        wheel_start_time = time.time()
         wheel_cmd = [str(python_exe), "-m", "pip", "wheel", ".", "-w", str(BUILD_DIR)]
         try:
             # Capture pip wheel output
@@ -225,23 +230,62 @@ def build_engine(python_exe, force=False, output_dir=None):
             return False
         
         log.info("\nBuilding source distribution...")
-        sdist_cmd = [str(python_exe), "setup.py", "sdist", "--dist-dir", str(BUILD_DIR)]
+        # Run setup.py with sdist directly, avoiding the problematic option
+        sdist_cmd = [
+            str(python_exe),
+            "setup.py",
+            "sdist"  # No additional options
+        ]
+        
         try:
-            subprocess.run(sdist_cmd, check=True)
+            # Create a modified environment to control where the sdist file goes
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(PROJECT_ROOT)
             
-            sdist_files = list(BUILD_DIR.glob("ares-*.tar.gz"))
-            if sdist_files:
-                sdist_file = sdist_files[0]
-                sdist_size = os.path.getsize(sdist_file)
-                log.info(f"Created source distribution: {sdist_file}")
-                log.info(f"Size: {format_size(sdist_size)}")
+            # Run the command with the modified environment
+            process = subprocess.run(
+                sdist_cmd,
+                check=False,  # Don't throw an exception on non-zero exit
+                capture_output=True,
+                text=True,
+                cwd=PROJECT_ROOT,
+                env=env
+            )
+            
+            # Check output directories for the tar.gz file
+            for search_dir in [BUILD_DIR, PROJECT_ROOT / "dist"]:
+                sdist_files = list(search_dir.glob("ares-*.tar.gz"))
+                if sdist_files:
+                    # Move the file to BUILD_DIR if it's not already there
+                    if search_dir != BUILD_DIR:
+                        for sdist_file in sdist_files:
+                            target_file = BUILD_DIR / sdist_file.name
+                            shutil.move(str(sdist_file), str(target_file))
+                            sdist_file = target_file
+                    
+                    # Report the file
+                    sdist_size = os.path.getsize(sdist_file)
+                    log.info(f"Created source distribution: {sdist_file}")
+                    log.info(f"Size: {format_size(sdist_size)}")
+                    break
             else:
-                # Don't fail if sdist fails, as long as we have the wheel
-                log.warn("Warning: Source distribution not found after build.")
-        except subprocess.CalledProcessError as e:
-            log.warn(f"Warning: Error building source distribution: {e}")
-            # Continue anyway - as long as we have the wheel file
-    
+                # No source distribution found
+                log.warn("No source distribution was created, but wheel is available.")
+                
+            # Clean up any "dist" directory that might have been created
+            dist_dir = PROJECT_ROOT / "dist"
+            if dist_dir.exists() and dist_dir.is_dir():
+                try:
+                    shutil.rmtree(dist_dir)
+                except Exception as e:
+                    log.warn(f"Could not remove temporary dist directory: {e}")
+                    
+        except Exception as e:
+            # Log the error but continue - don't fail the build if wheel was created
+            log.warn(f"Error building source distribution: {e}")
+            log.warn("Continuing with wheel package only.")
+        
+    # Calculate build duration regardless of which path was taken
     build_end_time = time.time()
     build_duration = build_end_time - build_start_time
     
@@ -290,7 +334,7 @@ def parse_args():
                         help=f'Directory to output build artifacts (default: {BUILD_DIR})')
     return parser.parse_args()
 
-def check_engine_built(build_dir=None):
+def check_engine_build(build_dir=None):
     """Check if the engine has been built properly.
     
     Args:
@@ -299,12 +343,8 @@ def check_engine_built(build_dir=None):
     Returns:
         bool: True if the engine is built (wheel files exist), False otherwise
     """
-    # If build_dir is provided, use it directly
-    if build_dir is not None:
-        check_dir = Path(build_dir)
-    else:
-        # Otherwise use the global BUILD_DIR/engine path
-        check_dir = BUILD_DIR / "engine"
+    # Determine directory to check - use provided dir or default to BUILD_DIR/engine
+    check_dir = Path(build_dir) if build_dir is not None else BUILD_DIR / "engine"
             
     # Check for wheel files - the primary build artifact
     wheel_files = list(check_dir.glob("ares-*.whl"))
@@ -312,10 +352,10 @@ def check_engine_built(build_dir=None):
     # Consider engine built if wheel files exist
     return len(wheel_files) > 0
 
-# Re-add command-line functionality
 if __name__ == "__main__":
     args = parse_args()
-    if build_engine(args.python, args.force, args.output_dir):
-        sys.exit(0)
-    else:
-        sys.exit(1)
+    
+    # Use the global CONFIGS
+    from ares.config import CONFIGS
+    
+    sys.exit(0 if build_engine(args.python, args.force, args.output_dir, configs=CONFIGS) else 1)

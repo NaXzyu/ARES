@@ -13,11 +13,11 @@ class BuildState:
     
     def __init__(self, project_dir, output_dir, name="project"):
         """Initialize build state tracker.
-        
+
         Args:
-            project_dir: Source directory of the project
-            output_dir: Directory where build outputs are stored
-            name: Name of the project (used in state file naming)
+            project_dir (str): Source directory of the project.
+            output_dir (str): Directory for build outputs.
+            name (str): Project name for state file naming.
         """
         self.project_dir = Path(project_dir)
         self.output_dir = Path(output_dir)

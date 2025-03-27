@@ -6,8 +6,50 @@ import subprocess
 from pathlib import Path
 
 from ares.utils import log
-from ares.utils.build_utils import get_cython_module_dirs, compute_file_hash
+from ares.utils.build_utils import compute_file_hash
 from ares.build.build_cache import load_build_cache, save_build_cache
+from ares.config.config_types import ConfigType  # Add this import
+from ares.config import CONFIGS  # Add this import
+
+def get_cython_module_dirs(project_root=None):
+    """Get Cython module directories from project configuration."""
+    # Default project root if not specified
+    if project_root is None:
+        project_root = Path(__file__).resolve().parent.parent.parent
+    
+    # Ensure project_root is a Path object
+    project_root = Path(project_root)
+    
+    # Add project root to path to ensure imports work
+    sys.path.insert(0, str(project_root))
+    
+    # Get the raw module dirs string from config using CONFIGS dictionary
+    module_dirs_str = CONFIGS[ConfigType.BUILD].get_raw_cython_module_dirs()
+    if not module_dirs_str:
+        log.error("Error: No Cython module directories defined in build.ini.")
+        log.error("Please define module_dirs in the [cython] section.")
+        sys.exit(1)
+    
+    # Parse the module dirs string
+    parsed_modules = []
+    for module_pair in module_dirs_str.split(','):
+        module_pair = module_pair.strip()
+        if ':' in module_pair:
+            module_name, description = module_pair.split(':', 1)
+            parsed_modules.append((module_name.strip(), description.strip()))
+    
+    # Convert to full paths
+    cython_dirs = []
+    for module_name, description in parsed_modules:
+        module_path = project_root / "ares" / module_name
+        cython_dirs.append((module_path, description))
+    
+    if not cython_dirs:
+        log.error("Error: No valid Cython module directories defined in build.ini.")
+        log.error("Please define module_dirs in the [cython] section.")
+        sys.exit(1)
+    
+    return cython_dirs
 
 def compile_cython_modules(python_exe, project_root, build_dir, build_log_path, force=False):
     """Compile the Cython modules for the project.
@@ -132,12 +174,7 @@ def check_compiled_modules(project_root, build_dir):
     log.info("Checking for compiled modules...")
     
     # Get Cython directories using the centralized function
-    cython_dirs = get_cython_module_dirs(project_root, error_on_missing=True)
-    
-    if not cython_dirs:
-        log.error("Error: No Cython module directories defined in project.ini.")
-        log.error("Please define module_dirs in the [cython] section of project.ini.")
-        sys.exit(1)
+    cython_dirs = get_cython_module_dirs(project_root)
     
     modules_found = False
     
@@ -184,13 +221,14 @@ def get_extensions(project_root, extra_compile_args=None):
         
     extensions = []
     
-    # Get extensions from package.ini
+    # Get extensions from package_config directly
     sys.path.insert(0, str(project_root))
-    from ares.config import config
-    package_config = config.load("package")
+    from ares.config import initialize, package_config
+    initialize()
     
-    if package_config and package_config.has_section("extensions"):
-        for name, path_spec in package_config.items("extensions"):
+    extension_data = package_config.get_extensions()
+    if extension_data:
+        for name, path_spec in extension_data.items():
             if ":" not in path_spec:
                 log.error(f"Error: Invalid extension format for {name}: {path_spec}")
                 log.error("Extension format should be 'module.name:path/to/file.pyx'")

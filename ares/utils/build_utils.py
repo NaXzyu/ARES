@@ -1,23 +1,20 @@
 """
 Build utility functions for Ares Engine.
 """
-from pathlib import Path
-import sys
-import os
 import hashlib
 import json
+import os
+from pathlib import Path
 
 def find_main_script(directory):
-    """Find a Python script with an entry point in the directory.
-    
-    Searches for main.py in the directory root and verifies it has a proper 
-    entry point with "if __name__ == '__main__':" block.
-    
+    """
+    Locate main.py in the directory and verify its entry point.
+
     Args:
-        directory: Path to search for main.py entry point
-        
+        directory: Directory to search for 'main.py'
+
     Returns:
-        Path to the main.py script or None if not found or invalid
+        Path of 'main.py' if found and valid, otherwise None.
     """
     directory = Path(directory)
     
@@ -25,8 +22,7 @@ def find_main_script(directory):
     main_script = directory / "main.py"
     
     if not main_script.exists():
-        print(f"Error: main.py not found in {directory}")
-        print("Projects must have a main.py file in the root directory.")
+        print(f"Error: main.py not found in {directory}. Projects must have a main.py file in the root directory.")
         return None
         
     # Verify main.py has proper entry point
@@ -36,79 +32,20 @@ def find_main_script(directory):
             if "if __name__ == '__main__':" in content or 'if __name__ == "__main__":' in content:
                 return main_script
             else:
-                print(f"Error: main.py found but missing required entry point.")
-                print("main.py must contain 'if __name__ == \"__main__\":' block.")
+                print("Error: main.py found but missing required entry point. main.py must contain 'if __name__ == \"__main__\":' block.")
                 return None
     except Exception as e:
         print(f"Error reading main.py: {e}")
         return None
 
-def get_cython_module_dirs(project_root=None, error_on_missing=False):
-    """Get Cython module directories from project configuration.
-    
-    Args:
-        project_root: Optional path to project root directory
-        error_on_missing: If True, raise an error when no modules defined
-        
-    Returns:
-        List of tuples (module_path, description)
-    """
-    # Default project root if not specified
-    if project_root is None:
-        # Find the project root from the current file
-        project_root = Path(__file__).resolve().parent.parent.parent
-    
-    # Ensure project_root is a Path object
-    project_root = Path(project_root)
-    
-    # Add project root to path to ensure imports work
-    sys.path.insert(0, str(project_root))
-    
-    try:
-        from ares.config import config
-        project_config = config.load("project")
-        
-        cython_dirs = []
-        if project_config and project_config.has_option("cython", "module_dirs"):
-            module_dirs_str = project_config.get("cython", "module_dirs")
-            
-            # Parse the comma-separated list of module_name:description pairs
-            for module_pair in module_dirs_str.split(','):
-                module_pair = module_pair.strip()
-                if ':' in module_pair:
-                    module_name, description = module_pair.split(':', 1)
-                    module_path = project_root / "ares" / module_name.strip()
-                    cython_dirs.append((module_path, description.strip()))
-        
-        if not cython_dirs:
-            error_msg = "Error: No Cython module directories defined in project.ini."
-            error_details = "Please define module_dirs in the [cython] section of project.ini."
-            
-            # Import logging if available
-            try:
-                from ares.utils import log
-                log.error(error_msg)
-                log.error(error_details)
-            except ImportError:
-                print(error_msg)
-                print(error_details)
-            
-            return []
-        
-        return cython_dirs
-    except ImportError as e:
-        # Handle case where config module can't be imported
-        print(f"Error: Could not load project configuration: {e}")
-        return []
-
 def compute_file_hash(file_path):
-    """Compute the MD5 hash of a file.
-    
+    """Return MD5 hex digest of a file.
+
     Args:
-        file_path: Path to the file to hash
-        
+        file_path (str): Path to the file.
+
     Returns:
-        MD5 hash of the file as a hex string
+        str: MD5 hash as a hexadecimal string.
     """
     hash_md5 = hashlib.md5()
     try:
@@ -127,18 +64,33 @@ def compute_file_hash(file_path):
 
 def hash_config(config):
     """Hash a configuration dictionary.
-    
+
     Args:
-        config: Dictionary containing configuration to hash
-        
+        config (dict): Configuration to hash.
+
     Returns:
-        str: MD5 hash of the configuration as a hex string, or empty string if config is None
+        str: MD5 hex digest of the configuration, or empty string if None.
     """
     if not config:
         return ""
     try:
+        # Convert any Path objects to strings before serialization
+        def make_serializable(value):
+            """Convert a value to a JSON serializable type."""
+            if isinstance(value, Path):
+                return str(value)
+            elif isinstance(value, dict):
+                return {k: make_serializable(v) for k, v in value.items()}
+            elif isinstance(value, (list, tuple)):
+                return [make_serializable(item) for item in value]
+            else:
+                return value
+        
+        # Make a serializable copy of the config
+        serializable_config = make_serializable(config)
+        
         # Sort keys for consistent hashing regardless of dict ordering
-        config_str = json.dumps(config, sort_keys=True)
+        config_str = json.dumps(serializable_config, sort_keys=True)
         return hashlib.md5(config_str.encode()).hexdigest()
     except Exception as e:
         # Import logging if available for better error reporting
@@ -150,14 +102,15 @@ def hash_config(config):
         return ""
 
 def find_cython_binaries(project_root=None, logger=None):
-    """Find all compiled Cython modules and Python files in the ares package.
-    
+    """
+    Return Cython and Python modules in the ares package.
+
     Args:
-        project_root: Optional path to project root directory
-        logger: Optional logging function to use for debug output
-        
+        project_root (Path, optional): Project root directory.
+        logger (Callable, optional): Logger for debug output.
+
     Returns:
-        list: List of tuples (file_path, dest_dir) for PyInstaller binaries
+        list: Tuples (file_path, dest_dir) for PyInstaller binaries.
     """
     # Default project root if not specified
     if project_root is None:
@@ -174,16 +127,16 @@ def find_cython_binaries(project_root=None, logger=None):
     log_func = logger if logger else lambda msg: None
     
     # Walk through the entire module structure
-    for root, dirs, files in os.walk(ares_root):
+    for root, _, files in os.walk(ares_root):
         for file in files:
             # Skip __pycache__ directories
             if "__pycache__" in root:
                 continue
                 
-            # Get relative path from ares root to create proper destination
+            # Use normpath to properly handle path separators
             rel_path = os.path.relpath(root, project_root)
-            dest_dir = rel_path.replace("\\", "/")  # Normalize path separators
-            
+            dest_dir = os.path.normpath(rel_path)
+
             # Full path to the file
             file_path = Path(root) / file
             

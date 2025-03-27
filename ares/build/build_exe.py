@@ -20,7 +20,11 @@ from ares.utils.build_utils import find_cython_binaries
 from ares.build.sdl_finder import find_sdl2_dlls
 from ares.build.build_template import create_spec_file, create_spec_from_template
 from ares.build.create_hooks import create_runtime_hooks
-from ares.build.clean_build import clean_egg_info  # Add this import
+from ares.build.clean_build import clean_egg_info
+
+# Import configs using the CONFIGS dictionary approach
+from ares.config import CONFIGS
+from ares.config.config_types import ConfigType
 
 class ExecutableBuilder:
     """Builds standalone executables from Python scripts using PyInstaller."""
@@ -32,6 +36,10 @@ class ExecutableBuilder:
         self.main_script = Path(main_script)
         self.name = name or self.main_script.stem
         self.resources_dir = Path(resources_dir) if resources_dir else None
+        
+        # Get package data from config using CONFIGS dictionary
+        self.package_data = CONFIGS[ConfigType.PACKAGE].get_package_data()
+        self.extensions = CONFIGS[ConfigType.PACKAGE].get_extensions()
         
         # Create output directory if it doesn't exist
         os.makedirs(self.output_dir, exist_ok=True)
@@ -110,6 +118,10 @@ class ExecutableBuilder:
         # Create runtime hooks (using our new module)
         hook_files = create_runtime_hooks(self.output_dir)
         
+        # Create the out subdirectory within output_dir for executable files
+        out_dir = self.output_dir / "out"
+        os.makedirs(out_dir, exist_ok=True)
+        
         # Don't try to unpack hooks - just use the list directly
         # First try to create spec file from template
         spec_file = create_spec_from_template(
@@ -139,7 +151,7 @@ class ExecutableBuilder:
             self.python_exe, "-m", "PyInstaller", 
             str(spec_file),
             "--clean",
-            "--distpath", str(self.output_dir),  # Specify output directory explicitly
+            "--distpath", str(out_dir),  # Use out subdirectory for output
             "--workpath", str(self.output_dir / "temp")  # Put work files in our temp directory
         ]
         
@@ -196,9 +208,9 @@ class ExecutableBuilder:
                     log_file.write(f"Error output: {e.stderr}\n")
             return False
         
-        # Get the executable path directly from output directory
+        # Get the executable path from the out subdirectory
         executable_name = f"{self.name}{self.executable_extension}"
-        target_exe = self.output_dir / executable_name
+        target_exe = out_dir / executable_name
         if target_exe.exists():
             # Calculate build telemetry
             build_end_time = time.time()
@@ -232,11 +244,12 @@ class ExecutableBuilder:
             if build_temp_dir.exists():
                 shutil.rmtree(build_temp_dir)
             
-            # After PyInstaller finishes, explicitly remove dist directory if it was created
-            dist_dir = PROJECT_ROOT / "dist"
-            if dist_dir.exists() and dist_dir.is_dir():
+            # After PyInstaller finishes, explicitly remove PROJECT ROOT dist directory if it was created
+            # This is different from our output out directory
+            temp_dist_dir = PROJECT_ROOT / "dist"
+            if temp_dist_dir.exists() and temp_dist_dir.is_dir() and temp_dist_dir != out_dir:
                 try:
-                    shutil.rmtree(dist_dir)
+                    shutil.rmtree(temp_dist_dir)
                     self.log("Removed temporary PyInstaller dist directory")
                 except (PermissionError, OSError) as e:
                     self.log(f"Warning: Could not remove temporary dist directory: {e}")

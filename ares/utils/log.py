@@ -15,38 +15,6 @@ T = TypeVar("T")
 DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 DEFAULT_DATE_FORMAT = "%Y.%m.%d:%H:%M:%S"
 
-# Simple logger class for use when real logging is not available
-class SimpleLogger:
-    """Simple logger that prints to console when real logging isn't available."""
-    
-    @staticmethod
-    def info(message):
-        """Print an info level message to stdout."""
-        print(f"INFO: {message}")
-    
-    @staticmethod
-    def warn(message):
-        """Print a warning level message to stdout."""
-        print(f"WARNING: {message}")
-    
-    @staticmethod
-    def warning(message):
-        """Alias for warn() to match logging interface."""
-        SimpleLogger.warn(message)
-    
-    @staticmethod
-    def error(message, exc_info=None):
-        """Print an error level message to stdout."""
-        print(f"ERROR: {message}")
-        if exc_info:
-            import traceback
-            traceback.print_exc()
-    
-    @staticmethod
-    def debug(message):
-        """Print a debug level message to stdout."""
-        print(f"DEBUG: {message}")
-
 class Log:
     """Unified logging with context tracking and level management"""
     
@@ -231,20 +199,3 @@ set_level = Log.set_level
 get_logger = Log.get_logger
 add_file_handler = Log.add_file_handler
 set_default_log_dir = Log.set_default_log_dir
-
-# Create a singleton SimpleLogger instance for fallback usage
-simple_logger = SimpleLogger()
-
-# Helper to get appropriate logger based on availability
-def get_simple_or_regular_logger():
-    """Return the appropriate logger based on availability.
-    
-    Returns:
-        Either the real Log instance if available, or SimpleLogger as fallback
-    """
-    try:
-        # Try to get the real logger
-        return Log.get()
-    except (ImportError, PermissionError, FileNotFoundError):
-        # Return SimpleLogger if real logger unavailable
-        return simple_logger

@@ -2,7 +2,6 @@
 Input handling system for keyboard, mouse, and gamepads.
 """
 import sdl2
-import logging
 
 class Input:
     def __init__(self):

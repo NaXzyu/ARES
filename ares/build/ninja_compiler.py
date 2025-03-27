@@ -14,26 +14,18 @@ class NinjaCompiler(build_ext):
     def finalize_options(self):
         super().finalize_options()
         
+        # Get compiler flags from compiler_config
         try:
             sys.path.insert(0, str(PROJECT_ROOT))
-            from ares.config import initialize, build_config, compiler_config
+            from ares.config import initialize, compiler_config
             initialize()
             
-            # Check if we should use Ninja
-            if build_config.getboolean("compiler", "use_ninja", True):
-                try:
-                    import ninja
-                    self.parallel = True
-                except ImportError:
-                    self.parallel = build_config.getint("compiler", "parallel_jobs", 4) > 1
-            else:
-                self.parallel = build_config.getint("compiler", "parallel_jobs", 4) > 1
-            
-            # Use compiler_config.get_compiler_flags() to get flags in a consistent way
+            # Use compiler_config flags directly
             self._compiler_flags = compiler_config.get_compiler_flags()
             
-        except (ImportError, AttributeError):
-            self.parallel = False
+        except Exception as e:
+            # Raise any error that occurs to exit the program gracefully
+            raise RuntimeError(f"Failed to initialize NinjaCompiler: {e}. Please ensure Ares Engine is properly installed.") from e
             
     def build_extensions(self):
         # Apply compiler flags if available

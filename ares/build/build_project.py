@@ -3,16 +3,12 @@
 import os
 from pathlib import Path
 
-from ares.utils.build_utils import find_main_script, get_cython_module_dirs
-from ares.config import initialize, project_config, build_config
+from ares.utils.build_utils import find_main_script
 from ares.build.build_exe import build_executable
 from ares.utils import log
 from ares.build.clean_build import clean_egg_info
 from ares.build.build_state import BuildState
-from ares.config.config_manager import load_project_config, load_build_config
-
-from ares.config.logging_config import initialize_logging
-initialize_logging()
+from ares.config.config_types import ConfigType
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parent.parent
@@ -34,7 +30,7 @@ def verify_engine_availability():
     print(f"Engine wheel: {wheel_files[0].name}")
     return True
 
-def build_project(py_exe, project_path, force=False, output_dir=None):
+def build_project(py_exe, project_path, output_dir, configs, force=False):
     """Build a project that uses the Ares engine."""
     log.info(f"Building project from {project_path} into {output_dir}...")
     
@@ -47,15 +43,26 @@ def build_project(py_exe, project_path, force=False, output_dir=None):
     if not project_source_dir or not project_source_dir.exists():
         print(f"Error: Project directory not found: {project_path}")
         return False
-        
-    # Load custom build configuration if specified - using the centralized function
-    custom_build_config = load_build_config(project_source_dir)
-
-    # Load project configuration - using the centralized function
-    config = load_project_config(project_source_dir)
     
-    # Use product_name for output directory name if available and no output_dir is specified
-    product_name = config.get("product_name", project_source_dir.name)
+    # Extract individual config objects from the dictionary
+    project_config = configs[ConfigType.PROJECT]
+    build_config = configs[ConfigType.BUILD]
+    package_config = configs[ConfigType.PACKAGE]
+    
+    # Get module directories from cython_compiler
+    from ares.build.cython_compiler import get_cython_module_dirs
+    cython_module_dirs = get_cython_module_dirs()
+    if cython_module_dirs:
+        extension_dirs = [module_dir[0] for module_dir in cython_module_dirs]
+        log.info(f"Found {len(extension_dirs)} extension source directories: {', '.join(str(dir) for dir in extension_dirs)}")
+    
+    # Check for extension directories
+    extension_dirs = [d for d in project_source_dir.iterdir() if d.is_dir() and (d / "extensions").exists()]
+    
+    log.info(f"Found {len(extension_dirs)} extension source directories: {', '.join(str(dir) for dir in extension_dirs)}")
+    
+    # Get values from configs
+    product_name = project_config.get_product_name()
     
     # Ensure output directory exists with the product name
     if output_dir:
@@ -66,8 +73,8 @@ def build_project(py_exe, project_path, force=False, output_dir=None):
     # Initialize build state tracker for incremental builds
     build_state = BuildState(project_source_dir, build_dir, name=product_name)
     
-    # Check if we need to rebuild
-    should_rebuild, reason = build_state.should_rebuild(config)
+    # Check if we need to rebuild using config overrides directly
+    should_rebuild, reason = build_state.should_rebuild(configs[ConfigType.BUILD].get_override_dict())
     
     if not should_rebuild and not force:
         print(f"No changes detected. Using existing build in {build_dir}")
@@ -122,22 +129,18 @@ def build_project(py_exe, project_path, force=False, output_dir=None):
 
     # Build the project executable
     try:
-        # Use project name as fallback if product name is not available
+        # Use project name as set earlier
         project_name = product_name if product_name else project_source_dir.name
 
         # Get resource directory based on config settings
-        resource_dir_name = config["resource_dir_name"]
+        resource_dir_name = build_config.get_resource_dir_name()
         resources_dir = project_source_dir / resource_dir_name
-        if not resources_dir.exists() or not config["include_resources"]:
+        if not resources_dir.exists() or not build_config.should_include_resources():
             resources_dir = None
         
-        # Get build settings from config
-        console_mode = config["console"]
-        onefile_mode = config["onefile"]
-
         print(f"Building project executable for {project_name}...")
-        print(f"  Console mode: {'enabled' if console_mode else 'disabled'}")
-        print(f"  Onefile mode: {'enabled' if onefile_mode else 'disabled'}")
+        print(f"  Console mode: {'enabled' if package_config.is_console_enabled() else 'disabled'}")
+        print(f"  Onefile mode: {'enabled' if package_config.is_onefile_enabled() else 'disabled'}")
 
         success = build_executable(
             python_exe=py_exe,
@@ -145,13 +148,13 @@ def build_project(py_exe, project_path, force=False, output_dir=None):
             output_dir=build_dir,
             name=project_name,
             resources_dir=resources_dir,
-            console=console_mode,
-            onefile=onefile_mode
+            console=package_config.is_console_enabled(),
+            onefile=package_config.is_onefile_enabled()
         )
 
         if success:
             # Update build state for incremental builds
-            build_state.mark_successful_build(config)
+            build_state.mark_successful_build(configs[ConfigType.BUILD].get_override_dict())
             print(f"Project built successfully to {build_dir}")
             return True
         else:

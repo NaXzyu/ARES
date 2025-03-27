@@ -20,13 +20,7 @@ BUILD_DIR = PROJECT_ROOT / "build"
 ENGINE_BUILD_DIR = BUILD_DIR / "engine"
 LOGS_DIR = PROJECT_ROOT / "logs"
 
-# Import SimpleLogger which doesn't rely on file logging
-from ares.utils.log import SimpleLogger, simple_logger
-
-# Create a simple logger for early operations
-log = simple_logger
-
-# Package metadata with PyInstaller dependency added through requirements.txt
+# Initialize metadata with defaults
 METADATA = {
     "name": "ares",
     "version": "0.1.0",
@@ -55,13 +49,53 @@ METADATA = {
     }
 }
 
-# Command classes setup will be initialized after determining mode
+# Command classes setup
 cmdclass = {}
 
-def find_python_3_12():
-    """Find Python 3.12 installation by trying multiple Python command names."""
-    # Try different Python command names in order of preference
-    python_commands = ["py", "python", "python3", "python3.12", "py3", "py3.12"]
+# Import utils only if needed to avoid early imports
+def import_utils():
+    global check_python_version, format_version, REQUIRED_PYTHON_VERSION
+    from ares.utils.utils import check_python_version, format_version
+    from ares.utils.constants import REQUIRED_PYTHON_VERSION
+
+def update_metadata():
+    """Update metadata with values from package_config if available."""
+    global METADATA
+    try:
+        from ares.config import package_config
+        metadata_updates = package_config.get_package_data()
+        METADATA.update(metadata_updates)
+        print("Loaded package metadata from package_config")
+    except (ImportError, AttributeError) as e:
+        print(f"Could not load package metadata from package_config: {e}")
+
+def get_python(args=None):
+    """Get a validated Python path from arguments or find appropriate version.
+
+    Args:
+        args: Command line arguments containing optional python path
+
+    Returns:
+        Path to valid Python executable or None if not found
+    """
+    # If args is provided and has a python attribute, use that path
+    if args and hasattr(args, 'python') and args.python:
+        python_path = Path(args.python)
+        if not python_path.exists():
+            print(f"Error: Specified Python executable not found: {python_path}")
+            return None
+        
+        # Verify Python version
+        if not check_python_version(python_path):
+            version_str = format_version(REQUIRED_PYTHON_VERSION)
+            print(f"Error: Python at {python_path} does not meet version requirements ({version_str}+)")
+            return None
+            
+        return python_path
+    
+    # Otherwise, try to find Python with required version
+    version_str = format_version(REQUIRED_PYTHON_VERSION)
+    python_commands = ["py", "python", "python3", f"python{version_str}", "py3", f"py{version_str}"]
     
     # First try the py launcher which gives version info
     if os.name == 'nt':  # Windows-specific approach using py launcher
@@ -72,10 +106,10 @@ def find_python_3_12():
                 match = re.match(r"^-V:3\.12(?:-64|-32)?\s+(\S+)", line)
                 if match:
                     python_path = Path(match.group(1))
-                    log.info(f"Found Python 3.12 at: {python_path}")
+                    print(f"Found Python 3.12 at: {python_path}")
                     return python_path
         except (subprocess.CalledProcessError, FileNotFoundError):
-            log.debug("Windows py launcher not available or failed.")
+            print("Windows py launcher not available or failed.")
     
     # Try each command systematically
     for cmd in python_commands:
@@ -102,106 +136,60 @@ def find_python_3_12():
                         text=True
                     )
                 python_path = Path(output.strip())
-                log.info(f"Found Python 3.12 at: {python_path}")
+                print(f"Found Python 3.12 at: {python_path}")
                 return python_path
             else:
-                log.debug(f"Found Python {version} at {cmd}, but need 3.12")
+                print(f"Found Python {version} at {cmd}, but need 3.12")
         except (subprocess.CalledProcessError, FileNotFoundError):
-            log.debug(f"Command '{cmd}' not found or failed.")
+            print(f"Command '{cmd}' not found or failed.")
     
-    # If nothing found, check user input
-    log.warn("Python 3.12 not found in PATH. Please enter the path to Python 3.12 manually.")
-    if os.name == 'nt':
-        log.warn("Example paths: C:\\Python312\\python.exe, C:\\Program Files\\Python312\\python.exe")
-    else:
-        log.warn("Example paths: /usr/bin/python3.12, /usr/local/bin/python3.12")
-    
-    # After 3 attempts, give up
-    for i in range(3):
-        path_input = input("Path to Python 3.12 executable (or press Enter to skip): ").strip()
-        if not path_input:
-            break
-            
-        try:
-            python_path = Path(path_input)
-            if not python_path.exists():
-                log.error(f"The specified path does not exist: {python_path}")
-                continue
-                
-            # Verify it's Python 3.12
-            output = subprocess.check_output(
-                [str(python_path), "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
-                text=True
-            )
-            version = output.strip()
-            if version == "3.12":
-                log.info(f"Using Python 3.12 at: {python_path}")
-                return python_path
-            else:
-                log.error(f"The specified path is Python {version}, not 3.12: {python_path}")
-        except Exception as e:
-            log.error(f"Error verifying Python path: {e}")
-    
-    log.error("Python 3.12 is required but could not be found.")
+    print("Error: Could not find Python 3.12+ interpreter.")
     return None
 
-def check_python_version(python_path, required_version=(3, 12)):
-    """Check if the Python interpreter meets the version requirements."""
-    try:
-        result = subprocess.run(
-            [str(python_path), "-c", f"import sys; sys.exit(0 if sys.version_info >= {required_version} else 1)"],
-            check=False
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
 
-def detect_existing_venv():
-    """Detect existing virtual environments in the project directory."""
-    venv_dirs = [
-        VENV_DIR,
-        PROJECT_ROOT / "venv",
-        PROJECT_ROOT / "env",
-        PROJECT_ROOT / ".env",
-        PROJECT_ROOT / "virtualenv",
-        PROJECT_ROOT / ".conda_env"
-    ]
-    for venv_dir in venv_dirs:
-        if not venv_dir.exists():
-            continue
-        if os.name == 'nt':
-            python_exe = venv_dir / "Scripts" / "python.exe"
-        else:
-            python_exe = venv_dir / "bin" / "python"
-        if python_exe.exists() and check_python_version(python_exe):
-            return venv_dir
-    return None
-
-def get_venv_python(skip_setup=False):
-    """Get a Python executable from a virtual environment, with optional setup."""
+def get_venv(python_path=None, skip_setup=False):
+    """Get a Python executable from a virtual environment.
+    
+    Args:
+        python_path: Optional explicit path to Python executable to use
+        skip_setup: If True, only return path without setting up environment
+        
+    Returns:
+        Path to Python executable in virtual environment
+    """
+    # If we're already in a virtual environment, use that Python
     if sys.prefix != sys.base_prefix:
         log.info(f"Already in virtual environment: {sys.prefix}")
         return Path(sys.executable)
+    
+    # Define venv Python path
     if os.name == 'nt':
         venv_python = VENV_DIR / "Scripts" / "python.exe"
     else:
         venv_python = VENV_DIR / "bin" / "python"
+    
+    # Create venv if needed
     if not venv_python.exists():
-        python_path = find_python_3_12()
-        if not python_path:
-            log.error("Error: Python 3.12+ is required but not found.")
-            sys.exit(1)
-        log.info(f"Creating virtual environment at {VENV_DIR}...")
+        # Use provided Python path or find Python 3.12
+        if python_path is None:
+            python_path = get_python()
+            if not python_path:
+                sys.exit(1)
+            
+        log.info(f"Creating virtual environment at {VENV_DIR} using {python_path}...")
         subprocess.run([str(python_path), "-m", "venv", str(VENV_DIR)], check=True)
         log.info("Virtual environment created successfully.")
         log.info("Upgrading pip...")
         subprocess.run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"], check=True)
     else:
         log.info(f"Using existing virtual environment at {VENV_DIR}")
+        
     if skip_setup:
         return venv_python
+        
     log.info("Upgrading pip...")
     subprocess.run([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"], check=True)
+    
     req_path = PROJECT_ROOT / "requirements.txt"
     if req_path.exists():
         log.info(f"Installing dependencies from {req_path}...")
@@ -209,6 +197,7 @@ def get_venv_python(skip_setup=False):
             subprocess.run([str(venv_python), "-m", "pip", "install", "-r", str(req_path)], check=True)
         except subprocess.CalledProcessError:
             log.warn("Warning: Some dependencies could not be installed.")
+    
     log.info("Installing package in development mode...")
     try:
         result = subprocess.run(
@@ -228,7 +217,9 @@ def get_venv_python(skip_setup=False):
     except Exception as e:
         log.error(f"Exception during package installation: {e}")
         log.error("You can continue with development, but some features may not work correctly.")
+    
     return venv_python
+
 
 def create_parser():
     """Create the argument parser for direct CLI usage."""
@@ -237,134 +228,129 @@ def create_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  py setup.py                  Create/setup virtual environment
-  py setup.py --build          Build the engine package
-  py setup.py --build path     Build a project from specified path
-  py setup.py --clean          Clean up build artifacts
-  py setup.py --force          Force rebuild all Cython modules and packages
+  python setup.py                  Create/setup virtual environment
+  python setup.py --build          Build only the engine package
+  python setup.py --build path     Build a project from specified path
+  python setup.py --clean          Clean up build artifacts
+  python setup.py --python path    Use specific Python interpreter (optional)
+  python setup.py --force          Force rebuild all Cython modules and packages
 """
     )
     parser.add_argument('--build', nargs='?', const='engine',
                         help='Build the engine (no arg) or a project (with path to project directory)')
     parser.add_argument('--clean', action='store_true',
                         help='Clean up build artifacts')
+    parser.add_argument('--python', type=str,
+                        help='Path to specific Python interpreter to use (must be 3.12+)')
     parser.add_argument('--force', action='store_true',
                         help='Force rebuilding all Cython modules and packages')
     return parser
 
-def build_engine(py_exe, force=False):
-    """Build the Ares Engine into the engine directory."""
-    # Only import build_engine when needed
-    from ares.build.build_engine import build_engine as _build_engine
-    
-    log.info(f"Building Ares Engine into {ENGINE_BUILD_DIR}...")
-    os.makedirs(ENGINE_BUILD_DIR, exist_ok=True)
+def is_pip_command():
+    """Check if script is being run by pip with commands like egg_info, develop, etc."""
+    pip_commands = ['egg_info', 'develop', 'install', 'bdist_wheel', 'sdist']
+    return any(cmd in sys.argv[1:] for cmd in pip_commands)
 
-    cmd = [str(py_exe), str(BUILD_SCRIPT), "--python", str(py_exe)]
-    if force:
-        cmd.append("--force")
-
-    # Add output directory parameter
-    cmd.extend(["--output-dir", str(ENGINE_BUILD_DIR)])
-
-    try:
-        log.info(f"Running build command: {' '.join(str(c) for c in cmd)}")
-        return _build_engine(py_exe, force, ENGINE_BUILD_DIR)
-    except Exception as e:
-        log.error(f"Error building engine: {e}")
-        return False
-
-# Check if we're running a standard setuptools command
-setuptools_commands = ['egg_info', 'bdist_wheel', 'install', 'develop', 'sdist', 'build_ext']
-is_setuptools_command = len(sys.argv) > 1 and sys.argv[1] in setuptools_commands
-
-# Special case for pip handling setuptools commands
-if is_setuptools_command:
-    # Initialize Ninja command class if available
-    try:
-        from ares.build.ninja_compiler import NinjaCompiler
-        if NinjaCompiler is not None:
-            cmdclass["build_ext"] = NinjaCompiler
-    except ImportError:
-        pass
-    
-    # Update metadata with command classes
-    METADATA["cmdclass"] = cmdclass
-    
-    # For setuptools commands, just call setup() and exit
-    setup(**METADATA)
-    sys.exit(0)
-
-# For our custom commands, use the normal CLI handling
+# Check if we're being run directly or by setuptools/pip
 if __name__ == "__main__":
-    parser = create_parser()
-    args, unknown_args = parser.parse_known_args()
-    
-    # Handle unknown arguments as error
-    if unknown_args:
-        # Pass through to setup() for any setuptools commands we didn't explicitly check for
-        if unknown_args[0] in ['--help', '-h'] or unknown_args[0].startswith('--'):
-            setup(**METADATA)
-            sys.exit(0)
-        else:
-            parser.print_help()
-            print(f"\nError: Unrecognized arguments: {' '.join(unknown_args)}")
-            sys.exit(1)
-    
-    # Special handling for clean mode
-    if args.clean:
-        # When cleaning, just run clean_project directly without initializing logging
-        print("Cleaning up build artifacts...")
-        from ares.build.clean_build import clean_project
-        clean_project()
-        print("Clean up completed!")
+    # Check if this is being run by pip with a command like egg_info/develop
+    if is_pip_command():
+        # Update metadata and let setuptools handle it
+        update_metadata()
+        setup(**METADATA)
     else:
-        # For all other modes, initialize real logging and imports
-        from ares.config.logging_config import initialize_logging
-        initialize_logging(LOGS_DIR)
+        # Import utils for our custom CLI
+        import_utils()
         
-        # Import modules for non-clean operations
-        from ares.utils import log
-        from ares.utils.build_utils import find_main_script, get_cython_module_dirs
-        from ares.build.build_engine import check_engine_built
-        from ares.build.ninja_compiler import NinjaCompiler
-        from ares.build.build_project import build_project
-        from ares.build.clean_build import clean_project
+        # Create our custom CLI parser
+        parser = create_parser()
+        args = parser.parse_args()
         
-        # Define flag for Ninja extension availability for non-clean operations
-        HAVE_NINJA_EXT = NinjaCompiler is not None
-        if HAVE_NINJA_EXT:
-            cmdclass["build_ext"] = NinjaCompiler
-        
-        # Update metadata with command classes
-        METADATA["cmdclass"] = cmdclass
-        
-        # Handle build operations
-        if args.build or args.force:
-            log.info("Setting up build environment...")
-            py_exe = get_venv_python(skip_setup=True)
-            
-            if args.build == 'engine' or args.build is None:
-                # Default case: build the engine
-                build_engine(py_exe, args.force)
-            elif os.path.exists(args.build):
-                # First ensure the engine is built
-                if not check_engine_built(ENGINE_BUILD_DIR):
-                    log.info("Engine not found or incomplete in build directory. Building engine first...")
-                    if not build_engine(py_exe, args.force):
-                        log.error("Failed to build engine. Cannot build project.")
-                        sys.exit(1)
-                else:
-                    log.info(f"Using previously built engine from: {ENGINE_BUILD_DIR}")
+        # Determine operation mode based on arguments
+        operation_mode = "clean" if args.clean else "build" if (args.build or args.force) else "setup"
+
+        match operation_mode:
+            case "clean":
+                # Clean mode - Import and run clean_project directly
+                from ares.build.clean_build import clean_project  # noqa: E402
+                clean_project()
                 
-                # Build a project from the specified path
-                build_project(py_exe, args.build, args.force)
-        else:
-            log.info("Setting up Ares Engine development environment...")
-            py_exe = get_venv_python(skip_setup=False)
-            log.info("\nAres Engine development environment is ready!")
-            log.info("To build the engine, run: python setup.py --build")
-            log.info("To build a project, run: python setup.py --build path/to/project")
+            case "build":
+                # Build mode - Load configs and set up build environment
+                from ares.config import get_global_configs  # noqa: E402
+                from ares.config.config_types import ConfigType  # noqa: E402
+                CONFIGS = get_global_configs()
+                
+                # Initialize logging using the config from CONFIGS
+                CONFIGS[ConfigType.LOGGING].initialize(LOGS_DIR)
+                
+                # Import modules for non-clean operations after logging is initialized
+                from ares.utils import log  # noqa: E402
+                from ares.build.build_engine import check_engine_build, build_engine  # noqa: E402
+                from ares.build.build_project import build_project  # noqa: E402
+                
+                # Ninja is a required dependency for building Ares Engine
+                from ares.build.ninja_compiler import NinjaCompiler  # noqa: E402
+                cmdclass["build_ext"] = NinjaCompiler
+                
+                # Update metadata: cmd classes & package config
+                METADATA["cmdclass"] = cmdclass
+                update_metadata()
+                
+                # Get the appropriate Python path and set up environment
+                python_path = get_python(args)
+                log.info("Setting up build environment...")
+                python_exe = get_venv(python_path, skip_setup=True)
+                
+                # Determine what to build based on build argument
+                build_target = args.build or "engine"
+                match build_target:
+                    case "engine":
+                        # Default: Build engine using already loaded global configs
+                        log.info(f"Building Ares Engine into {ENGINE_BUILD_DIR}...")
+                        os.makedirs(ENGINE_BUILD_DIR, exist_ok=True)
+                        build_engine(python_exe, args.force, ENGINE_BUILD_DIR, configs=CONFIGS)
+                    case project_path if os.path.exists(project_path):
+                        # First ensure the engine is built
+                        if not check_engine_build(ENGINE_BUILD_DIR):
+                            log.info("Engine not found or incomplete in build directory. Building engine first...")
+                            build_engine(python_exe, args.force, ENGINE_BUILD_DIR, configs=CONFIGS)
+                        else:
+                            log.info(f"Using previously built engine from: {ENGINE_BUILD_DIR}")
+                        
+                        # Build a project from the specified path
+                        build_project(
+                            py_exe=python_exe, 
+                            project_path=project_path,
+                            output_dir=BUILD_DIR,
+                            configs=CONFIGS,
+                            force=args.force
+                        )
+                    case _:
+                        log.error(f"Project path not found: {args.build}")
+                        sys.exit(1)
+            
+            case "setup":
+                # Setup mode - Create virtual environment and install dependencies
+                from ares.config import get_global_configs  # noqa: E402
+                from ares.config.config_types import ConfigType  # noqa: E402
+                CONFIGS = get_global_configs()
+                CONFIGS[ConfigType.LOGGING].initialize(LOGS_DIR)
+                
+                # Import log module after initializing logging
+                from ares.utils import log  # noqa: E402
+                
+                # Update metadata and get Python path
+                update_metadata()
+                python_path = get_python(args)
+                
+                print("Setting up Ares Engine development environment...")
+                python_exe = get_venv(python_path, skip_setup=False)
+                
+                print("\nAres Engine development environment is ready!")
+                print("To build the engine, run: python setup.py --build")
+                print("To build a project, run: python setup.py --build path/to/project")
 else:
     # This only runs when the script is imported, not when run directly
+    update_metadata()
     setup(**METADATA)

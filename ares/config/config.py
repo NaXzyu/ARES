@@ -23,17 +23,15 @@ class Config:
         default_path = CONFIG_FILES_DIR / f"{name}.ini"
         user_path = USER_CONFIG_DIR / f"{name}.ini"
         
-        loaded = False
+        self.loaded = False
         
         if default_path.exists():
             config.read(default_path)
-            loaded = True
-            print(f"Loaded default config from {default_path}")
+            self.loaded = True
             
         if user_path.exists():
             config.read(user_path)
-            loaded = True
-            print(f"Loaded user config from {user_path}")
+            self.loaded = True
             
         self.configs[name] = config
         return config

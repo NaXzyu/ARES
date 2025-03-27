@@ -17,8 +17,7 @@ class Window:
         self.running = True
         self.is_fullscreen = False
         
-        # Create SDL window directly using the sdl2.ext approach which is more consistent
-        # This avoids the from_window() method which may not be available in all SDL2 versions
+        # Create SDL window directly using the sdl2.ext approach, avoiding the from_window() method which may not be available in all SDL2 versions.
         self.ext_window = sdl2.ext.Window(
             title,
             size=(width, height),
