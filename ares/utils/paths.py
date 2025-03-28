@@ -6,8 +6,6 @@ import os
 import sys
 from pathlib import Path
 
-from ares.utils.constants import CURRENT_PLATFORM
-
 class Paths:
     """Central class for managing all engine paths."""
     
@@ -34,47 +32,92 @@ class Paths:
                 return "AresEngine"
     
     @classmethod
-    def get_user_data_dirs(cls):
-        """Get user data directories based on platform."""
-        app_name = cls.get_app_name()
+    def get_user_data_dirs(cls, app_name=None):
+        """Get user data directories based on platform.
         
-        # Determine base directory based on runtime mode and platform
-        if cls.IS_FROZEN:
-            # In frozen mode, store logs next to the executable
-            base_dir = cls.APP_DIR
+        Args:
+            app_name: Optional app name override (defaults to auto-detected app name)
+            
+        Returns:
+            dict: Dictionary containing paths for different user data purposes
+        """
+        if app_name is None:
+            app_name = cls.get_app_name()
+        
+        # Determine base directory based on platform
+        if sys.platform.startswith("win"):
+            try:
+                base_dir = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / "AppData" / "Local")))
+                base_dir = base_dir / app_name
+            except (KeyError, TypeError):
+                base_dir = Path.home() / "AppData" / "Local" / app_name
+        elif sys.platform.startswith("darwin"):
+            base_dir = Path.home() / "Library" / "Application Support" / app_name
         else:
-            # For development mode, use platform-specific directories
-            if sys.platform.startswith("win"):
-                try:
-                    base_dir = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / "AppData" / "Local")))
-                    base_dir = base_dir / app_name / "Saved"
-                except (KeyError, TypeError):
-                    base_dir = Path.home() / "AppData" / "Local" / app_name / "Saved"
-            elif sys.platform.startswith("darwin"):
-                base_dir = Path.home() / "Library" / "Application Support" / app_name / "Saved"
-            else:
-                try:
-                    import appdirs
-                    base_dir = Path(appdirs.user_data_dir("ares-engine", app_name)) / "Saved"
-                except ImportError:
-                    base_dir = Path.home() / ".local" / "share" / "ares-engine" / "Saved"
+            try:
+                import appdirs
+                base_dir = Path(appdirs.user_data_dir("ares-engine", app_name))
+            except ImportError:
+                base_dir = Path.home() / ".local" / "share" / "ares-engine" / app_name
         
         # Create standard subdirectories based on the determined base directory
         return {
-            "USER_DATA_DIR": base_dir,
-            "USER_CONFIG_DIR": base_dir / "Config" / CURRENT_PLATFORM,
-            "USER_LOGS_DIR": base_dir / "Logs",
-            "USER_SCREENSHOTS_DIR": base_dir / "Screenshots",
-            "USER_SAVES_DIR": base_dir / "SaveGames"
+            "BASE_DIR": base_dir,
+            "CONFIG_DIR": base_dir / "Config",
+            "LOGS_DIR": base_dir / "Logs",
+            "SCREENSHOTS_DIR": base_dir / "Screenshots",
+            "SAVES_DIR": base_dir / "SaveGames",
+            "CACHE_DIR": base_dir / "Cache"
         }
 
     @classmethod
-    def create_directories(cls):
-        """Create all required directories."""
-        dirs = cls.get_user_data_dirs()
+    def get_project_dirs(cls):
+        """Get directories for development and build operations in the project.
+        
+        Returns:
+            dict: Dictionary containing paths for project-related directories
+        """
+        return {
+            "PROJECT_ROOT": cls.PROJECT_ROOT,
+            "APP_DIR": cls.APP_DIR,
+            "BUILD_DIR": cls.PROJECT_ROOT / "build",
+            "DEV_LOGS_DIR": cls.PROJECT_ROOT / "logs",
+            "ENGINE_BUILD_DIR": cls.PROJECT_ROOT / "build" / "engine",
+            "CACHE_DIR": cls.PROJECT_ROOT / "build" / "cache"
+        }
+
+    @classmethod
+    def create_app_directories(cls, app_name=None):
+        """Create all required app data directories.
+        
+        Args:
+            app_name: Optional app name override
+            
+        Returns:
+            dict: Dictionary of created directories
+        """
+        dirs = cls.get_user_data_dirs(app_name)
         for directory in dirs.values():
             try:
                 os.makedirs(directory, exist_ok=True)
+            except (OSError, PermissionError):
+                # Silently continue if we can't create directories
+                pass
+        return dirs
+        
+    @classmethod
+    def create_project_directories(cls):
+        """Create all required project directories.
+        
+        Returns:
+            dict: Dictionary of created directories
+        """
+        dirs = cls.get_project_dirs()
+        # Only create these specific directories
+        create_keys = ["BUILD_DIR", "DEV_LOGS_DIR", "ENGINE_BUILD_DIR", "CACHE_DIR"]
+        for key in create_keys:
+            try:
+                os.makedirs(dirs[key], exist_ok=True)
             except (OSError, PermissionError):
                 # Silently continue if we can't create directories
                 pass
@@ -101,31 +144,68 @@ class Paths:
         return cls.get_ini_dir() / filename
     
     @classmethod
-    def get_runtime_log_file(cls):
+    def get_logs_dir(cls, for_app=True, app_name=None):
+        """Get the appropriate logs directory (app or project).
+        
+        Args:
+            for_app: True to get app logs dir, False to get project logs dir
+            app_name: Optional app name for app logs dir
+        
+        Returns:
+            Path: Path to appropriate logs directory
+        """
+        if for_app and cls.IS_FROZEN:
+            # For runtime frozen apps, use the app logs directory
+            return cls.get_user_data_dirs(app_name)["LOGS_DIR"]
+        else:
+            # For development or build logs, use project logs directory
+            return cls.get_project_dirs()["DEV_LOGS_DIR"]
+    
+    @classmethod
+    def get_log_file(cls, filename, for_app=True, app_name=None):
+        """Get the path to a specific log file.
+        
+        Args:
+            filename: Name of the log file
+            for_app: True to use app logs dir, False to use project logs dir
+            app_name: Optional app name for app logs
+            
+        Returns:
+            Path: Path to the log file
+        """
+        return cls.get_logs_dir(for_app, app_name) / filename
+    
+    @classmethod
+    def get_runtime_log_file(cls, app_name=None):
         """Get the path to the runtime log file."""
         if cls.IS_FROZEN:
-            # For runtime, use product name from project config
-            app_name = cls.get_app_name()
-            return cls.get_user_data_dirs()["USER_LOGS_DIR"] / f"{app_name}.log"
+            # For runtime, use app name and app logs directory
+            app_name = app_name or cls.get_app_name()
+            return cls.get_log_file(f"{app_name}.log", True, app_name)
         else:
-            # For development, use engine.log
-            return cls.get_user_data_dirs()["USER_LOGS_DIR"] / "engine.log"
+            # For development, use engine.log in project logs directory
+            return cls.get_log_file("engine.log", False)
     
     @classmethod
     def get_build_log_file(cls):
-        """Get the path to the build log file."""
-        return cls.get_user_data_dirs()["USER_LOGS_DIR"] / "build.log"
+        """Get the path to the build log file.
+        Always use project logs directory for build logs.
+        """
+        return cls.get_log_file("build.log", False)
 
+    # This function avoids circular imports by not importing from config module directly
+    @classmethod
+    def get_user_config_dir(cls):
+        """Get the user config directory without risking circular imports."""
+        dirs = cls.get_user_data_dirs("AresEngine")  # Use hardcoded default app name instead of get_app_name
+        return dirs["CONFIG_DIR"]
 
-# Initialize paths
-paths = Paths()
-user_dirs = paths.create_directories()
+# Expose the USER_CONFIG_DIR safely - defer the actual creation
+def get_user_config_dir():
+    """Get the user config directory, creating it if needed."""
+    config_dir = Paths.get_user_config_dir()
+    os.makedirs(config_dir, exist_ok=True)
+    return config_dir
 
-# Export commonly used paths
-IS_FROZEN = Paths.IS_FROZEN
-PROJECT_ROOT = Paths.PROJECT_ROOT
-USER_DATA_DIR = user_dirs["USER_DATA_DIR"]
-USER_CONFIG_DIR = user_dirs["USER_CONFIG_DIR"]
-USER_LOGS_DIR = user_dirs["USER_LOGS_DIR"]
-USER_SCREENSHOTS_DIR = user_dirs["USER_SCREENSHOTS_DIR"]
-USER_SAVES_DIR = user_dirs["USER_SAVES_DIR"]
+# Only export the function, not a concrete value to avoid circular imports
+__all__ = ['Paths', 'get_user_config_dir']

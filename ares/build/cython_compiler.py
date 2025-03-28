@@ -20,36 +20,95 @@ def get_cython_module_dirs(project_root=None):
     # Ensure project_root is a Path object
     project_root = Path(project_root)
     
-    # Add project root to path to ensure imports work
-    sys.path.insert(0, str(project_root))
-    
-    # Get the raw module dirs string from config using CONFIGS dictionary
-    module_dirs_str = CONFIGS[ConfigType.BUILD].get_raw_cython_module_dirs()
-    if not module_dirs_str:
-        log.error("Error: No Cython module directories defined in build.ini.")
-        log.error("Please define module_dirs in the [cython] section.")
-        sys.exit(1)
-    
-    # Parse the module dirs string
-    parsed_modules = []
-    for module_pair in module_dirs_str.split(','):
-        module_pair = module_pair.strip()
-        if ':' in module_pair:
-            module_name, description = module_pair.split(':', 1)
-            parsed_modules.append((module_name.strip(), description.strip()))
-    
-    # Convert to full paths
-    cython_dirs = []
-    for module_name, description in parsed_modules:
-        module_path = project_root / "ares" / module_name
-        cython_dirs.append((module_path, description))
-    
-    if not cython_dirs:
+    try:
+        # Add project root to path to ensure imports work
+        sys.path.insert(0, str(project_root))
+        
+        # Try to use CONFIGS dictionary first
+        try:
+            from ares.config.config_types import ConfigType
+            from ares.config import CONFIGS
+            
+            if ConfigType.BUILD in CONFIGS and CONFIGS[ConfigType.BUILD] is not None:
+                module_dirs_str = CONFIGS[ConfigType.BUILD].get_raw_cython_module_dirs()
+                if module_dirs_str:
+                    # Continue with parsing module_dirs_str
+                    parsed_modules = []
+                    for module_pair in module_dirs_str.split(','):
+                        module_pair = module_pair.strip()
+                        if ':' in module_pair:
+                            module_name, description = module_pair.split(':', 1)
+                            parsed_modules.append((module_name.strip(), description.strip()))
+                    
+                    # Convert to full paths
+                    cython_dirs = []
+                    for module_name, description in parsed_modules:
+                        module_path = project_root / "ares" / module_name
+                        cython_dirs.append((module_path, description))
+                    
+                    if cython_dirs:
+                        return cython_dirs
+        except (ImportError, KeyError, AttributeError) as e:
+            log.warn(f"Could not access BuildConfig from CONFIGS: {e}. Trying direct file access.")
+        
+        # Fallback to direct config file access if CONFIGS approach failed
+        ini_path = project_root / "ares" / "ini" / "build.ini"
+        if ini_path.exists():
+            import configparser
+            parser = configparser.ConfigParser()
+            parser.read(ini_path)
+            
+            if 'cython' in parser and 'module_dirs' in parser['cython']:
+                module_dirs_str = parser['cython']['module_dirs']
+                
+                # Parse module dirs
+                parsed_modules = []
+                for module_pair in module_dirs_str.split(','):
+                    module_pair = module_pair.strip()
+                    if ':' in module_pair:
+                        module_name, description = module_pair.split(':', 1)
+                        parsed_modules.append((module_name.strip(), description.strip()))
+                
+                # Convert to full paths
+                cython_dirs = []
+                for module_name, description in parsed_modules:
+                    module_path = project_root / "ares" / module_name
+                    cython_dirs.append((module_path, description))
+                
+                if cython_dirs:
+                    return cython_dirs
+        
+        # If we get here, we couldn't find valid module dirs
         log.error("Error: No valid Cython module directories defined in build.ini.")
         log.error("Please define module_dirs in the [cython] section.")
-        sys.exit(1)
-    
-    return cython_dirs
+        
+        # Use these hardcoded defaults instead of exiting
+        log.warn("Using default module directories as fallback")
+        default_dirs = [
+            ("core", "core modules"),
+            ("math", "math modules"),
+            ("physics", "physics modules"),
+            ("renderer", "renderer modules")
+        ]
+        
+        cython_dirs = []
+        for module_name, description in default_dirs:
+            module_path = project_root / "ares" / module_name
+            cython_dirs.append((module_path, description))
+        
+        return cython_dirs
+        
+    except Exception as e:
+        import traceback
+        log.error(f"Error getting Cython module directories: {e}")
+        log.error(traceback.format_exc())
+        
+        # Return sensible defaults instead of crashing
+        default_dirs = [
+            (project_root / "ares" / "math", "math modules"),
+            (project_root / "ares" / "physics", "physics modules")
+        ]
+        return default_dirs
 
 def compile_cython_modules(python_exe, project_root, build_dir, build_log_path, force=False):
     """Compile the Cython modules for the project.
@@ -70,25 +129,54 @@ def compile_cython_modules(python_exe, project_root, build_dir, build_log_path, 
     from ares.config import initialize, build_config, compiler_config
     initialize()
     
+    # Fix: Remove the int() wrapper and use the correct parameter format for get_int/get_bool
     compiler_directives = {
-        'language_level': build_config.getint("cython", "language_level", 3),
-        'boundscheck': build_config.getboolean("cython", "boundscheck", False),
-        'wraparound': build_config.getboolean("cython", "wraparound", False),
-        'cdivision': build_config.getboolean("cython", "cdivision", True),
+        'language_level': build_config.get_int("language_level", 3, "cython"),
+        'boundscheck': build_config.get_bool("boundscheck", False, "cython"),
+        'wraparound': build_config.get_bool("wraparound", False, "cython"),
+        'cdivision': build_config.get_bool("cdivision", True, "cython"),
     }
     
-    inplace = build_config.getboolean("build", "inplace", True)
+    inplace = build_config.get_bool("build", "inplace", True)
     
     old_argv = sys.argv.copy()
     
     # Use compiler_config.get_compiler_flags() to get flags in a consistent way
     compiler_flags = compiler_config.get_compiler_flags()
     
+    # Fix: Clean up compiler flags before passing them
+    if (compiler_flags is None):
+        compiler_flags = []
+    
+    # Filter out flags like 'common' that are causing warnings
+    if compiler_flags:
+        # Keep only flags that don't cause "unrecognized source file" warnings
+        valid_flags = []
+        for flag in compiler_flags:
+            if flag not in ['common', 'unix', 'windows']:
+                valid_flags.append(flag)
+        compiler_flags = valid_flags
+    
     build_args = ['build_ext']
     if inplace:
         build_args.append('--inplace')
     
     all_extensions = get_extensions(project_root, extra_compile_args=compiler_flags)
+    
+    # First check if modules already exist - otherwise force compilation
+    modules_already_exist = False
+    cython_dirs = get_cython_module_dirs(project_root)
+    for cython_dir, desc in cython_dirs:
+        for ext in ['.pyd', '.so']:
+            if list(cython_dir.glob(f"*{ext}")):
+                modules_already_exist = True
+                log.info(f"Found existing compiled {desc}")
+                break
+    
+    # Force rebuilding if no modules exist
+    if not modules_already_exist:
+        log.info("No compiled modules found. Forcing compilation.")
+        force = True
     
     extensions_to_build = check_file_changes(all_extensions, project_root, build_dir, force)
     
@@ -144,14 +232,20 @@ setup(
                 universal_newlines=True
             )
             
-            # Log Cython compilation output to build log
+            # Log Cython compilation output to both build log and through our log system
             with open(build_log_path, 'a') as log_file:
                 log_file.write("\n--- Cython Compilation Output ---\n")
                 for line in process.stdout:
                     log_file.write(line)
-                    # Only print summary info to console
-                    if "Cythonizing" in line or "warning" in line.lower() or "error" in line.lower():
-                        print(line.strip())
+                    # Send compilation progress and warnings through our logger
+                    line = line.strip()
+                    if "[" in line and "Cythonizing" in line:
+                        # Extract the progress info: [1/3] Cythonizing path
+                        log.info(line)
+                    elif "warning" in line.lower():
+                        log.warn(line)  # Changed from log.warning to log.warn
+                    elif "error" in line.lower():
+                        log.error(line)
             
             # Wait for process to complete
             ret_code = process.wait()
@@ -178,7 +272,9 @@ def check_compiled_modules(project_root, build_dir):
     
     modules_found = False
     
+    # First check directly in the module directories
     for cython_dir, desc in cython_dirs:
+        log.info(f"Checking directory: {cython_dir}")
         for ext in ['.pyd', '.so']:
             if list(cython_dir.glob(f"*{ext}")):
                 modules_found = True
@@ -186,76 +282,235 @@ def check_compiled_modules(project_root, build_dir):
                 break
     
     if not modules_found:
-        build_dirs = [d for d in build_dir.glob("lib.*")]
-        if build_dirs:
+        # Look in the build directory - need to find the specific platform directory
+        log.info(f"No modules found directly in module dirs")
+        log.info(f"Searching build directory: {build_dir}...")
+        
+        # Directly look for the standard setuptools build directory pattern
+        lib_dirs = set()  # Use a set to avoid duplicates
+        
+        # DIRECT SEARCH: Look for the specific lib.* directory which is the standard setuptools build output
+        direct_lib_dirs = list(build_dir.glob("lib.*"))
+        if direct_lib_dirs:
+            log.info(f"Found {len(direct_lib_dirs)} build lib directories")
+            for dir_path in direct_lib_dirs:
+                lib_dirs.add(str(dir_path))  # Convert to string for set deduplication
+        
+        # PARENT SEARCH: Look in parent directory if we're in an engine subdirectory
+        parent_build = build_dir.parent
+        parent_lib_dirs = list(parent_build.glob("lib.*"))
+        if parent_lib_dirs:
+            log.info(f"Found {len(parent_lib_dirs)} lib dirs in parent: {parent_build}")
+            for dir_path in parent_lib_dirs:
+                lib_dirs.add(str(dir_path))
+            
+        # PROJECT ROOT SEARCH: Also look in project build directory as a fallback
+        project_build = project_root / "build"
+        if project_build.exists():
+            project_lib_dirs = list(project_build.glob("lib.*"))
+            if project_lib_dirs:
+                log.info(f"Found {len(project_lib_dirs)} lib dirs in project root build: {project_build}")
+                for dir_path in project_lib_dirs:
+                    lib_dirs.add(str(dir_path))
+        
+        # Search in the temp.* directory as well (another setuptools standard)
+        temp_dirs = list(build_dir.glob("temp.*"))
+        if temp_dirs:
+            log.info(f"Found {len(temp_dirs)} temp build directories")
+            
+        # Convert back to Path objects
+        lib_dirs = [Path(d) for d in lib_dirs]
+        log.info(f"Found {len(lib_dirs)} unique library directories")
+        
+        # Check each lib directory for compiled modules
+        for lib_dir in lib_dirs:
+            ares_dir = lib_dir / "ares"
+            if not ares_dir.exists():
+                continue
+                
+            log.info(f"Checking {ares_dir} for compiled modules")
+            
+            # Check each module type directory
             for cython_dir, desc in cython_dirs:
                 module_name = cython_dir.name
-                source_path = build_dirs[0] / "ares" / module_name
-                if source_path.exists():
+                lib_module_dir = ares_dir / module_name
+                
+                if lib_module_dir.exists():
+                    log.info(f"Scanning {lib_module_dir} for module files")
+                    
+                    # Look for Cython-compiled files with any naming pattern
+                    # This handles platform and version specifics like .cp312-win_amd64.pyd
+                    module_files = []
+                    # Standard extensions
                     for ext in ['.pyd', '.so']:
-                        for file in source_path.glob(f"*{ext}"):
-                            target = cython_dir / file.name
-                            log.info(f"Moving {file} to {target}")
+                        module_files.extend(list(lib_module_dir.glob(f"*{ext}")))
+                    # Version-tagged extensions like .cp312-win_amd64.pyd
+                    module_files.extend(list(lib_module_dir.glob("*.cp*-*.pyd")))
+                    module_files.extend(list(lib_module_dir.glob("*.cpython-*.so")))
+                    
+                    if module_files:
+                        log.info(f"Found {len(module_files)} compiled modules in {lib_module_dir}")
+                        for module_file in module_files:
+                            # Create destination directory
+                            os.makedirs(cython_dir, exist_ok=True)
+                            # Copy module to destination
+                            target = cython_dir / module_file.name
+                            
+                            # Check if file already exists and has the same content
+                            if target.exists() and target.stat().st_size == module_file.stat().st_size:
+                                log.info(f"File {target.name} already exists in destination, skipping")
+                                modules_found = True
+                                continue
+                                
+                            log.info(f"Copying {module_file} -> {target}")
                             try:
-                                os.makedirs(cython_dir, exist_ok=True)
                                 import shutil
-                                shutil.copy2(file, target)
+                                shutil.copy2(module_file, target)
                                 modules_found = True
                             except Exception as e:
-                                log.error(f"Error copying file {file} to {target}: {e}")
+                                log.error(f"Error copying module: {e}")
+    
+    # Final verification - check all module directories again after copying
+    modules_found = False
+    for cython_dir, desc in cython_dirs:
+        found_files = set()  # Use a set to avoid duplicates
+        for ext in ['.pyd', '.so']:
+            for file in cython_dir.glob(f"*{ext}"):
+                found_files.add(file.name)
+        # Also look for version-tagged extensions
+        for file in cython_dir.glob("*.cp*-*.pyd"):
+            found_files.add(file.name)
+        for file in cython_dir.glob("*.cpython-*.so"):
+            found_files.add(file.name)
+        
+        if found_files:
+            modules_found = True
+            log.info(f"Found {len(found_files)} compiled modules in {cython_dir}")
+            for file_name in found_files:
+                log.info(f"  {file_name}")
     
     if modules_found:
         log.info("Cython modules compiled successfully.")
+        return True
     else:
-        log.error("Error: Could not find compiled Cython modules.")
+        # Last-ditch effort to find any compiled modules anywhere
+        log.error("Could not find compiled Cython modules in standard locations.")
+        log.error("Emergency search for .pyd and .so files in build tree...")
+        
+        # Print the build tree structure to help diagnose
+        for root, dirs, files in os.walk(build_dir):
+            for file in files:
+                if file.endswith('.pyd') or file.endswith('.so') or 'vector' in file or 'matrix' in file or 'collision' in file:
+                    log.error(f"Found potential module: {Path(root) / file}")
+        
+        # Print the build directory structure to get more info
+        log.error("\nBuild directory contents:")
+        _print_dir_tree(build_dir, max_depth=3)
+        
+        log.error("Error: Could not find or copy compiled Cython modules.")
         sys.exit(1)
         
     return modules_found
 
+def _print_dir_tree(directory, max_depth=3, current_depth=0):
+    """Helper function to print directory structure for debugging."""
+    if current_depth > max_depth:
+        log.error(f"{' ' * current_depth * 2}...")
+        return
+    
+    try:
+        log.error(f"{' ' * current_depth * 2}{directory.name}/")
+        if directory.is_dir():
+            for item in directory.iterdir():
+                if item.is_dir():
+                    _print_dir_tree(item, max_depth, current_depth + 1)
+                else:
+                    log.error(f"{' ' * (current_depth + 1) * 2}{item.name}")
+    except Exception as e:
+        log.error(f"{' ' * current_depth * 2}Error: {e}")
+
 def get_extensions(project_root, extra_compile_args=None):
     """Define Cython extension modules for compilation."""
     from setuptools.extension import Extension
+    import traceback
     
     if extra_compile_args is None:
         extra_compile_args = []
         
     extensions = []
     
-    # Get extensions from package_config directly
-    sys.path.insert(0, str(project_root))
-    from ares.config import initialize, package_config
-    initialize()
-    
-    extension_data = package_config.get_extensions()
-    if extension_data:
-        for name, path_spec in extension_data.items():
-            if ":" not in path_spec:
-                log.error(f"Error: Invalid extension format for {name}: {path_spec}")
-                log.error("Extension format should be 'module.name:path/to/file.pyx'")
-                sys.exit(1)
-                
-            module_name, pyx_path = path_spec.split(":", 1)
-            pyx_path = pyx_path.strip()
+    try:
+        # Instead of using package_config from ares.config, load the package.ini directly from project
+        ini_dir = Path(project_root) / "ares" / "ini"
+        package_ini_path = ini_dir / "package.ini"
+        
+        log.info(f"Extension loading: Looking for package.ini at {package_ini_path}")
+        
+        if not package_ini_path.exists():
+            log.error(f"Extension loading: package.ini not found at {package_ini_path}")
+            return []
             
-            if not Path(pyx_path).exists():
-                log.error(f"Error: Extension source file not found: {pyx_path}")
-                log.error("Please verify the path is correct in package.ini")
-                sys.exit(1)
+        # Use ConfigParser directly to avoid initialization complexities
+        import configparser
+        parser = configparser.ConfigParser()
+        parser.read(package_ini_path)
+        
+        log.info(f"Extension loading: Loaded package.ini from {package_ini_path}")
+        log.info(f"Extension loading: Available sections: {parser.sections()}")
+        
+        # Check if extensions section exists and show its contents
+        if "extensions" in parser:
+            extensions_items = list(parser.items("extensions"))
+            log.info(f"Extension loading: Found {len(extensions_items)} items in [extensions] section")
+            
+            for name, path_spec in extensions_items:
+                log.info(f"Extension definition: {name} = {path_spec}")
                 
-            extensions.append(
-                Extension(
-                    module_name,
-                    [pyx_path],
-                    extra_compile_args=extra_compile_args
+                if ":" not in path_spec:
+                    log.error(f"Error: Invalid extension format for {name}: {path_spec}")
+                    log.error("Extension format should be 'module.name:path/to/file.pyx'")
+                    continue
+                    
+                module_name, pyx_path = path_spec.split(":", 1)
+                pyx_path = pyx_path.strip()
+                
+                # Convert to absolute path relative to project root
+                full_pyx_path = Path(project_root) / pyx_path
+                
+                if not full_pyx_path.exists():
+                    log.error(f"Error: Extension source file not found: {full_pyx_path}")
+                    log.error(f"Working directory: {os.getcwd()}")
+                    log.error(f"Project root: {project_root}")
+                    log.error("Please verify the path is correct in package.ini")
+                    continue
+                    
+                extensions.append(
+                    Extension(
+                        module_name,
+                        [str(full_pyx_path)],
+                        extra_compile_args=extra_compile_args
+                    )
                 )
-            )
+                log.info(f"Added extension {module_name} from {full_pyx_path}")
+        else:
+            log.error("Extension loading: No [extensions] section found in package.ini")
+            
+    except Exception as e:
+        log.error(f"Exception while loading extensions: {e}")
+        log.error(traceback.format_exc())
     
-    # Report error if no extensions defined
+    # If no extensions were found but we need them for the build, provide useful error
     if not extensions:
-        log.error("Error: No Cython extensions defined in package.ini")
+        log.error("Error: No valid Cython extensions defined in package.ini")
         log.error("Please add extension definitions to the [extensions] section")
         log.error("Format: name = module.name:path/to/file.pyx")
-        sys.exit(1)
+        
+        # Print paths to help diagnose the issue
+        log.error(f"Project root: {project_root}")
+        log.error(f"Current directory: {os.getcwd()}")
+        
+        # Instead of exiting, we'll raise an exception
+        raise ValueError("No valid Cython extensions found - check logs for details")
     
     return extensions
 

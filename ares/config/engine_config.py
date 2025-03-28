@@ -63,21 +63,21 @@ class EngineConfig(BaseConfig):
     
     def get_resolution(self):
         """Get the configured resolution as a tuple (width, height)."""
-        width = self.getint("graphics", "resolution_width", 1280)
-        height = self.getint("graphics", "resolution_height", 720)
+        width = self.get_int("graphics", "resolution_width", 1280)
+        height = self.get_int("graphics", "resolution_height", 720)
         return (width, height)
     
     def is_fullscreen(self):
         """Check if fullscreen mode is enabled."""
-        return self.getboolean("graphics", "fullscreen", False)
+        return self.get_bool("graphics", "fullscreen", False)
     
     def is_vsync_enabled(self):
         """Check if vertical sync is enabled."""
-        return self.getboolean("graphics", "vsync", True)
+        return self.get_bool("graphics", "vsync", True)
     
     def get_max_fps(self):
         """Get the maximum frames per second setting."""
-        return self.getint("graphics", "max_fps", 60)
+        return self.get_int("graphics", "max_fps", 60)
     
     def get_physics_timestep(self):
         """Get the physics engine timestep in seconds."""
@@ -93,7 +93,7 @@ class EngineConfig(BaseConfig):
     
     def should_show_fps(self):
         """Check if FPS display is enabled."""
-        return self.getboolean("debug", "show_fps", False)
+        return self.get_bool("debug", "show_fps", False)
     
     def get_master_volume(self):
         """Get the master volume level."""
@@ -101,7 +101,7 @@ class EngineConfig(BaseConfig):
     
     def is_audio_muted(self):
         """Check if audio is muted."""
-        return self.getboolean("audio", "mute", False)
+        return self.get_bool("audio", "mute", False)
     
     def get_override_dict(self):
         """Get dictionary of important configuration values."""

@@ -49,7 +49,7 @@ class CompilerConfig(BaseConfig):
                 flags.extend(platform_flags.split())
         
         # Add any debug symbols if needed
-        if self.getboolean("compiler", "debug_symbols", False):
+        if self.get_bool("compiler", "debug_symbols", False):
             if is_windows():
                 flags.append("/Zi")
             else:
@@ -59,19 +59,19 @@ class CompilerConfig(BaseConfig):
     
     def use_ninja(self):
         """Check if Ninja build system should be used.""" 
-        return self.getboolean("compiler", "use_ninja", True)
+        return self.get_bool("compiler", "use_ninja", True)
     
     def get_parallel_jobs(self):
         """Get number of parallel compilation jobs.""" 
-        return self.getint("compiler", "parallel_jobs", 8)
+        return self.get_int("compiler", "parallel_jobs", 8)
     
     def get_optimization_level(self):
         """Get optimization level for compilation.""" 
-        return self.getint("compiler", "optimize", 3)
+        return self.get_int("compiler", "optimize", 3)
     
     def is_lto_enabled(self):
         """Check if link-time optimization is enabled.""" 
-        return self.getboolean("compiler", "enable_lto", True)
+        return self.get_bool("compiler", "enable_lto", True)
     
     def get_include_dirs(self):
         """Get additional include directories.""" 
@@ -87,7 +87,7 @@ class CompilerConfig(BaseConfig):
         """Get dictionary of important configuration values."""
         return {
             "optimization_level": self.get("compiler", "optimization_level", "O3"),
-            "debug_symbols": self.getboolean("compiler", "debug_symbols", False),
+            "debug_symbols": self.get_bool("compiler", "debug_symbols", False),
             "use_ninja": self.use_ninja(),
             "parallel_jobs": self.get_parallel_jobs(),
             "enable_lto": self.is_lto_enabled(),

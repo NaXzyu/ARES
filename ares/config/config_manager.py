@@ -21,7 +21,7 @@ class ConfigManager:
         Returns:
             Path: Directory where configuration files should be stored
         """
-        # Use platform-specific locations
+        # Use platform-specific locations - removed OS-specific subdirectory
         if platform.system() == "Windows":
             base_dir = os.environ.get("LOCALAPPDATA", 
                          os.path.join(os.environ["USERPROFILE"], "AppData", "Local"))
@@ -36,14 +36,30 @@ class ConfigManager:
         return config_dir
     
     @classmethod
-    def extract_embedded_configs(cls, app_name):
-        """Extract config files from the embedded resources to the user config directory."""
+    def extract_embedded_configs(cls, app_name, config_dir=None):
+        """Extract config files from the embedded resources to the user config directory.
+        
+        Only extracts configs that don't already exist to preserve user modifications.
+        
+        Args:
+            app_name: Application name used for directory structure
+            config_dir: Optional custom config directory path
+            
+        Returns:
+            Path: Path to the config directory that was used
+        """
         if not getattr(sys, 'frozen', False):
             # Only needed in frozen applications
             return None
         
         # Get appropriate config directory
-        config_dir = cls.get_app_config_dir(app_name)
+        if config_dir is None:
+            config_dir = cls.get_app_config_dir(app_name)
+        else:
+            config_dir = Path(config_dir)
+        
+        # Ensure directory exists
+        os.makedirs(config_dir, exist_ok=True)
         
         # Source directory in PyInstaller bundle
         meipass = Path(sys._MEIPASS)
@@ -54,7 +70,8 @@ class ConfigManager:
             print(f"Warning: No embedded config files found at {source_ini_dir}")
             return config_dir
         
-        # Copy all INI files, don't overwrite existing ones
+        # Only extract default config files that don't already exist
+        # This ensures we don't overwrite user modified settings
         for ini_file in source_ini_dir.glob("*.ini"):
             target_path = config_dir / ini_file.name
             
@@ -69,8 +86,11 @@ class ConfigManager:
         return config_dir
 
     @classmethod
-    def get_config_file_path(cls, filename, app_name, create_default=True):
-        """Get the path to a config file, extracting from embedded resources if needed."""
+    def get_config_file_path(cls, filename, app_name, create_default=False):
+        """Get the path to a config file, extracting from embedded resources if needed.
+        
+        Changed default behavior to not auto-create default files unless specifically requested.
+        """
         config_dir = cls.get_app_config_dir(app_name)
         config_path = config_dir / filename
         

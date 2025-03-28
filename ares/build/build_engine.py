@@ -185,11 +185,11 @@ def build_engine(python_exe, force, output_dir, configs):
     else:
         # Need to rebuild - either changes detected, force rebuild, or missing wheel
         if not wheel_files:
-            log.info("\nWheel package not found. Building new packages.")
+            log.info("Wheel package not found. Building new packages.")
         elif rebuild_needed:
             log.info("\nChanges detected. Rebuilding packages.")
             
-        log.info("\nBuilding wheel package...")
+        log.info("Building wheel package...")
         wheel_cmd = [str(python_exe), "-m", "pip", "wheel", ".", "-w", str(BUILD_DIR)]
         try:
             # Capture pip wheel output
@@ -206,10 +206,24 @@ def build_engine(python_exe, force, output_dir, configs):
                 log_file.write("\n--- Wheel Build Output ---\n")
                 for line in process.stdout:
                     log_file.write(line)
-                    # Only print summary info to console
-                    if "Processing" in line or "Building wheel" in line or "Created wheel" in line:
-                        print(line.strip())
-        
+                    # Use our logger to display important wheel build information
+                    line = line.strip()
+                    if "Processing" in line:
+                        log.info(f"Processing {line.split('Processing ')[1]}")
+                    elif "Building wheel" in line:
+                        log.info(f"Building wheel: {line}")
+                    elif "Created wheel for ares" in line:
+                        log.info(f"Created wheel: {line.split('Created wheel for ares: ')[1]}")
+                    elif "Building wheel" in line and "started" in line:
+                        log.info("Building wheel package started")
+                    elif "Building wheel" in line and "finished" in line:
+                        log.info("Building wheel package finished")
+                    # Only print important information to console
+                    elif "error:" in line.lower():
+                        log.error(line)
+                    elif "warning:" in line.lower():
+                        log.warn(line)
+            
             # Wait for process to complete
             ret_code = process.wait()
             if ret_code != 0:
@@ -229,7 +243,7 @@ def build_engine(python_exe, force, output_dir, configs):
             log.error(f"Error building wheel: {e}")
             return False
         
-        log.info("\nBuilding source distribution...")
+        log.info("Building source distribution...")
         # Run setup.py with sdist directly, avoiding the problematic option
         sdist_cmd = [
             str(python_exe),
@@ -304,20 +318,23 @@ def build_engine(python_exe, force, output_dir, configs):
         for file in wheel_files + sdist_files:
             log_file.write(f"  - {file.name} ({format_size(os.path.getsize(file))})\n")
     
-    log.info("\n" + "="*50)
+    log.info("="*50)
     log.info(" BUILD SUMMARY ".center(50, "="))
     log.info("="*50)
     log.info(f"Build time:      {format_time(build_duration)}")
     log.info(f"Build log:       {BUILD_LOG_PATH}")
+    log.info(f"Package:         {BUILD_DIR}")
     log.info("Build artifacts:")
     for file in wheel_files + sdist_files:
         log.info(f"  - {file.name} ({format_size(os.path.getsize(file))})")
-    log.info("="*50 + "\n")
+    log.info("="*50)
     
-    log.info(f"\nBuild completed successfully. Packages available in: {BUILD_DIR}")
-    log.info("\nTo install the engine, run:")
-    wheel_file = wheel_files[0].name if wheel_files else "*.whl"
-    log.info(f"  pip install {BUILD_DIR / wheel_file}\n")
+    if wheel_files:
+        wheel_path = wheel_files[0]
+        log.info(f"To install the engine, run:")
+        log.info(f"  pip install {wheel_path}")
+    log.info("="*50)
+    
     
     # Final verification
     wheel_files = list(BUILD_DIR.glob("ares-*.whl"))

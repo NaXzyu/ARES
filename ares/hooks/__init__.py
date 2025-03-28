@@ -6,6 +6,20 @@ These hooks ensure that all required modules and resources are included when fre
 
 from __future__ import annotations
 
-# Nothing to import directly from this module, it's mainly for PyInstaller hooks
+# Import only what we need now - updated with new filenames
+from .hook_type import HookType
+from .hook_manager import HookManager
 
-__all__ = []
+# Also import renamed hook files directly
+from .configs_hook import init_configs
+from .ares_hook import collect_ares_files, hiddenimports
+from .sdl2_hook import configure_sdl2_paths
+
+__all__ = [
+    'HookType',
+    'HookManager',
+    'init_configs',
+    'collect_ares_files',
+    'hiddenimports',
+    'configure_sdl2_paths'
+]

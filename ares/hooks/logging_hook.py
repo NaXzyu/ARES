@@ -72,7 +72,7 @@ def setup_runtime_logging():
     """Configures logging system for frozen applications"""
     global _hook_initialized
     
-    if _hook_initialized:
+    if (_hook_initialized):
         return
     
     # Set up consistent paths
@@ -87,44 +87,53 @@ def setup_runtime_logging():
         meipass_dir = None
         app_name = Path(sys.argv[0]).stem if sys.argv else 'app'
     
-    # Import config manager and initialize configuration
-    try:
-        from ares.config import config_manager
-        config_dir = config_manager.initialize_configuration(app_name)
-        
-        # Now import and initialize logging with the extracted config
-        from ares.config.logging_config import initialize_logging
-        
-        # Use the config directory
-        initialize_logging(config_dir, log_filename=f"{app_name}.log")
-        
-    except ImportError:
-        # Simplified fallback if config_manager isn't available
-        logs_dir = exe_dir
-        
-        # Import and initialize logging directly
-        from ares.config.logging_config import initialize_logging
-        initialize_logging(logs_dir, log_filename=f"{app_name}.log")
+    # Get paths from centralized Paths utility
+    from ares.utils.paths import Paths
     
-    # Get the log utility for application logging
+    # Create app directories structure 
+    app_dirs = Paths.create_app_directories(app_name)
+    logs_dir = app_dirs["LOGS_DIR"]
+    config_dir = app_dirs["CONFIG_DIR"]
+    
+    print(f"App name: {app_name}")
+    print(f"Config directory: {config_dir}")
+    print(f"Logs directory: {logs_dir}")
+    
+    # Configure basic logging as a starting point
+    log_file = logs_dir / f"{app_name}.log"
+    logging.basicConfig(
+        filename=log_file,
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        filemode='a'
+    )
+    print(f"Basic logging initialized to {log_file}")
+    
+    # Initialize logging without try-except - let errors propagate naturally
+    # Use the global CONFIGS dictionary to access logging config
+    from ares.config import CONFIGS
+    from ares.config.config_types import ConfigType
+    
+    # Initialize logging using the already configured logging object
+    if ConfigType.LOGGING in CONFIGS and CONFIGS[ConfigType.LOGGING]:
+        CONFIGS[ConfigType.LOGGING].initialize(logs_dir, log_filename=f"{app_name}.log")
+        print(f"Advanced logging configuration initialized for {app_name}")
+    else:
+        raise RuntimeError("Logging configuration not available in CONFIGS")
+    
+    # Get the log utility for application logging - no try-except
     from ares.utils import log
     
     # Log startup information
     log.info(f"Starting {app_name}")
     log.info(f"Executable directory: {exe_dir}")
-    log.info(f"Log file: {logs_dir / f'{app_name}.log'}")
+    log.info(f"Configuration directory: {config_dir}")
+    log.info(f"Log directory: {logs_dir}")
     
     # Log PyInstaller info
     if getattr(sys, 'frozen', False):
         log.info(f"Running in PyInstaller bundle")
         log.info(f"Temporary directory: {meipass_dir}")
-        
-        # Check for INI file presence
-        ini_path = meipass_dir / "ares" / "ini" / "logging.ini"
-        if ini_path.exists():
-            log.info(f"Using logging configuration from {ini_path}")
-        else:
-            log.info("Using default logging configuration")
     
     # Set up exception hook
     sys.excepthook = handle_exception

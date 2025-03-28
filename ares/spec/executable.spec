@@ -5,6 +5,26 @@ block_cipher = None
 # Define excluded modules/packages to avoid permission issues
 excludes = ['ares.egg-info']
 
+# Get runtime hooks dynamically from HookManager
+import sys
+import os
+from pathlib import Path
+
+# Use a more reliable method to find the project root
+# Instead of relying on __file__ which isn't defined in PyInstaller context
+import ares
+project_root = Path(ares.__file__).resolve().parents[1]
+
+# Add project root to path if needed
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+# Get runtime hooks in proper execution order using HookManager
+from ares.hooks.hook_manager import HookManager
+hooks_path = project_root / "ares" / "hooks"
+runtime_hooks = HookManager.get_runtime_hooks(hooks_path)
+
+# Ensure the hooks are listed in the correct order for proper initialization
 a = Analysis(
     ['{{MAIN_SCRIPT}}'],
     pathex=[],
@@ -13,7 +33,7 @@ a = Analysis(
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=runtime_hooks,  # Dynamically generated hooks list
     excludes=excludes,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -69,14 +89,15 @@ try:
 except ImportError:
     print("Warning: sdl2dll not found - SDL2 functionality may be limited")
 
-# Add key hidden imports
+# Add key hidden imports - use new hook module names consistently
 a.hiddenimports.extend([
     'sdl2', 'sdl2.ext', 'sdl2.dll',
     'ares.core.window', 'ares.core.input',
     'ares.utils.log', 'ares.config.logging_config',
     'ares.config.config_manager',
-    'ares.hooks.hook_runtime_logging',
-    'ares.hooks.hook_sdl2', 'ares.hooks.hook_cython_modules'
+    'ares.hooks.hook_type', 'ares.hooks.hook_manager',
+    'ares.hooks.configs_hook', 'ares.hooks.logging_hook',
+    'ares.hooks.ares_hook', 'ares.hooks.sdl2_hook', 'ares.hooks.cython_hook'
 ])
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)

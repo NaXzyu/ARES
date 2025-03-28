@@ -50,10 +50,30 @@ def save_build_cache(cache, cache_file=None, cache_dir=None):
     
     os.makedirs(cache_dir, exist_ok=True)
     try:
+        # Process any Path objects before saving
+        processed_cache = _preprocess_paths_for_json(cache)
         with open(cache_file, "w") as f:
-            json.dump(cache, f, indent=2)
+            json.dump(processed_cache, f, indent=2)
     except IOError as e:
         log.warn(f"Warning: Failed to save build cache: {e}")
+
+def _preprocess_paths_for_json(obj):
+    """Convert any Path objects in a nested structure to strings for JSON serialization.
+    
+    Args:
+        obj: The object to process (can be dict, list, Path, etc.)
+        
+    Returns:
+        The processed object with Path objects converted to strings
+    """
+    if isinstance(obj, Path):
+        return str(obj)
+    elif isinstance(obj, dict):
+        return {k: _preprocess_paths_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_preprocess_paths_for_json(item) for item in obj]
+    else:
+        return obj
 
 def set_cache_paths(build_dir):
     """Update the global cache paths based on a custom build directory.

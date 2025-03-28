@@ -3,7 +3,9 @@
 
 import os
 import shutil
+import time
 from pathlib import Path
+from ares.utils.utils import format_time
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 BUILD_DIR = PROJECT_ROOT / "build"
@@ -12,6 +14,9 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 def clean_project():
     """Clean up build artifacts from the project directory."""
     print("Cleaning up build artifacts...")
+    
+    # Start timing
+    start_time = time.time()
     
     paths_to_clean = [
         BUILD_DIR,
@@ -53,7 +58,9 @@ def clean_project():
         except Exception as e:
             print(f"WARNING: Could not remove {path}: {e}")
     
-    print("Clean completed successfully.")
+    # Calculate elapsed time and use the utility function
+    elapsed_time = time.time() - start_time
+    print(f"Clean completed successfully in {format_time(elapsed_time)}.")
     return True
 
 # Helper function to handle read-only files on Windows
@@ -69,14 +76,17 @@ def handle_remove_readonly(func, path, exc):
 
 def clean_egg_info():
     """Clean only egg-info directories - useful for pre-build cleanup."""
+    # Import logging system from ares.utils
+    from ares.utils import log
+    
     for egg_info in PROJECT_ROOT.glob("*.egg-info"):
         if egg_info.is_dir():
-            print(f"Removing {egg_info}")
+            log.info(f"Removing {egg_info}")
             try:
                 shutil.rmtree(egg_info, onexc=handle_remove_readonly)
-                print(f"Successfully removed {egg_info}")
+                log.info(f"Successfully removed {egg_info}")
             except Exception as e:
-                print(f"WARNING: Could not remove {egg_info} - {e}")
+                log.warn(f"WARNING: Could not remove {egg_info} - {e}")
     
     # Also clean __pycache__ directories
     for pycache in PROJECT_ROOT.glob("**/__pycache__"):

@@ -1,73 +1,164 @@
-"""Configuration manager for Ares Engine."""
+"""Base configuration management class and utilities."""
 
 import os
 import configparser
+from pathlib import Path
 
-from . import USER_CONFIG_DIR, CONFIG_FILES_DIR
+from ares.utils.paths import get_user_config_dir
 
 class Config:
-    def __init__(self):
-        if not CONFIG_FILES_DIR.exists():
-            os.makedirs(CONFIG_FILES_DIR, exist_ok=True)
-        if not USER_CONFIG_DIR.exists():
-            os.makedirs(USER_CONFIG_DIR, exist_ok=True)
-        
-        self.configs = {}
+    """Base configuration class for the Ares Engine.
     
-    def load(self, name):
-        if name in self.configs:
-            return self.configs[name]
+    This provides standard methods for loading, saving, and managing configuration files.
+    """
+    
+    def __init__(self, config_name="config", section="DEFAULT"):
+        """Initialize the configuration.
+        
+        Args:
+            config_name: Base name for the config file (without .ini)
+            section: Default section to use in the INI file
+        """
+        # Get user configuration directory
+        self.config_dir = get_user_config_dir()
+        os.makedirs(self.config_dir, exist_ok=True)
+        
+        self.config_name = config_name
+        self.config_file = self.config_dir / f"{config_name}.ini"
+        self.section = section
+        self.parser = configparser.ConfigParser()
+        
+        # Load initial configuration if available
+        self.load()
+    
+    def load(self):
+        """Load configuration from file."""
+        # Always ensure section exists
+        if not self.section in self.parser:
+            self.parser[self.section] = {}
             
-        config = configparser.ConfigParser(comment_prefixes=('#', ';'))
+        # Try to load from file if it exists
+        if self.config_file.exists():
+            try:
+                self.parser.read(self.config_file)
+                return True
+            except configparser.Error:
+                print(f"Warning: Could not parse config file {self.config_file}")
+                return False
         
-        default_path = CONFIG_FILES_DIR / f"{name}.ini"
-        user_path = USER_CONFIG_DIR / f"{name}.ini"
+        return True  # Return success even if file doesn't exist
+                    
+    def save(self):
+        """Save configuration to file."""
+        try:
+            with open(self.config_file, 'w') as config_file:
+                self.parser.write(config_file)
+            return True
+        except (OSError, PermissionError) as e:
+            print(f"Error saving config to {self.config_file}: {e}")
+            return False
+    
+    def get(self, key, default=None, section=None):
+        """Get a configuration value.
         
-        self.loaded = False
-        
-        if default_path.exists():
-            config.read(default_path)
-            self.loaded = True
+        Args:
+            key: Configuration key to retrieve
+            default: Default value to return if key not found
+            section: Section to look in (defaults to self.section)
             
-        if user_path.exists():
-            config.read(user_path)
-            self.loaded = True
+        Returns:
+            Configuration value or default if not found
+        """
+        section = section or self.section
+        
+        if section in self.parser and key in self.parser[section]:
+            return self.parser[section][key]
+        
+        return default
+        
+    def set(self, key, value, section=None):
+        """Set a configuration value.
+        
+        Args:
+            key: Configuration key to set
+            value: Value to set
+            section: Section to use (defaults to self.section)
             
-        self.configs[name] = config
-        return config
-    
-    def save(self, name, config=None):
-        if config is None and name in self.configs:
-            config = self.configs[name]
-        elif config is None:
-            raise ValueError(f"No config loaded with name '{name}'")
+        Returns:
+            bool: Whether the value was set successfully
+        """
+        section = section or self.section
         
-        user_path = USER_CONFIG_DIR / f"{name}.ini"
-        os.makedirs(user_path.parent, exist_ok=True)
+        # Ensure section exists
+        if not section in self.parser:
+            self.parser[section] = {}
+            
+        # Store value as string
+        self.parser[section][key] = str(value)
+        return True
         
-        with open(user_path, 'w') as f:
-            config.write(f)
+    def get_section(self, section=None):
+        """Get all key-value pairs in a section.
         
-        print(f"Configuration saved to {user_path}")
-    
-    def get_value(self, config_name, section, option, fallback=None):
-        config = self.load(config_name)
-        if config.has_section(section):
-            return config.get(section, option, fallback=fallback)
-        return fallback
-    
-    def set_value(self, config_name, section, option, value):
-        config = self.load(config_name)
-        if not config.has_section(section):
-            config.add_section(section)
-        config.set(section, option, value)
-        return config
-    
-    def list_configs(self):
-        config_files = [f.stem for f in CONFIG_FILES_DIR.glob("*.ini")]
-        return config_files
+        Args:
+            section: Section name (defaults to self.section)
+            
+        Returns:
+            dict: Dictionary of key-value pairs in the section
+        """
+        section = section or self.section
+        
+        if section in self.parser:
+            return dict(self.parser[section])
+        
+        return {}
+        
+    def load_overrides(self, filename):
+        """Load configuration overrides from an external file.
+        
+        Args:
+            filename: Path to the override file
+            
+        Returns:
+            dict: Dictionary containing:
+                - "overridden": bool indicating if any values were overridden
+                - "section": name of the section that was overridden
+                - "values": dictionary of overridden values
+        """
+        result = {
+            "overridden": False,
+            "section": self.section,
+            "values": {}
+        }
+        
+        if not Path(filename).exists():
+            return result
+            
+        # Create a new parser for the override file
+        override_parser = configparser.ConfigParser()
+        try:
+            override_parser.read(filename)
+        except configparser.Error:
+            return result
+            
+        # Check if our section exists
+        if not self.section in override_parser:
+            return result
+            
+        # Apply overrides
+        for key, value in override_parser[self.section].items():
+            old_value = self.get(key)
+            self.set(key, value)
+            if old_value != value:
+                result["overridden"] = True
+                result["values"][key] = value
+                
+        return result
+            
 
+# Create a global config instance
 config = Config()
 
 def get_config():
+    """Get the global configuration instance."""
     return config

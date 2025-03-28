@@ -23,7 +23,7 @@ class AssetsConfig(BaseConfig):
     
     def should_compress_textures(self):
         """Check if texture compression is enabled."""
-        return self.getboolean("assets", "compress_textures", True)
+        return self.get_bool("assets", "compress_textures", True)
     
     def get_audio_quality(self):
         """Get the audio quality setting."""
@@ -31,7 +31,7 @@ class AssetsConfig(BaseConfig):
     
     def should_bundle_assets(self):
         """Check if assets should be bundled with the executable."""
-        return self.getboolean("assets", "bundle_assets", True)
+        return self.get_bool("assets", "bundle_assets", True)
     
     def get_exclude_patterns(self):
         """Get list of file patterns to exclude from asset processing."""
@@ -50,7 +50,7 @@ class AssetsConfig(BaseConfig):
             "bundle_assets": self.should_bundle_assets(),
             "exclude_patterns": self.get_exclude_patterns(),
             "asset_compression": self.get_asset_compression(),
-            "optimize_assets": self.getboolean("assets", "optimize_assets", True)
+            "optimize_assets": self.get_bool("assets", "optimize_assets", True)
         }
     
     def initialize(self, *args, **kwargs):

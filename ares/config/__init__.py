@@ -13,14 +13,21 @@ import os
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR = PROJECT_ROOT / "ares" / "ini"
 
-# Import user paths from paths module
-from ares.utils.paths import USER_CONFIG_DIR
+# Import user paths function from paths module to avoid circular imports
+from ares.utils.paths import get_user_config_dir
 CONFIG_FILES_DIR = DEFAULT_CONFIG_DIR
 
-# Create config directories if they don't exist
-os.makedirs(USER_CONFIG_DIR, exist_ok=True)
+# Create config directories lazily - don't call at import time
+def ensure_config_dir():
+    """Ensure the user config directory exists."""
+    user_config_dir = get_user_config_dir()
+    os.makedirs(user_config_dir, exist_ok=True)
+    return user_config_dir
 
-# Import and create configuration objects
+# Get user config dir only when needed
+USER_CONFIG_DIR = None  # Will be set when needed
+
+# Rest of imports
 from .config import config, get_config
 from .config_manager import ConfigManager
 from .engine_config import EngineConfig
@@ -49,16 +56,12 @@ _global_configs = None
 CONFIGS = None # Alias as CONFIGS for consistency with usage in setup.py
 
 def initialize() -> bool:
-    """Initialize the configuration system.
-    
-    Returns:
-        bool: True if initialization was successful
-    """
-    global _initialized
+    """Initialize the configuration system."""
+    global _initialized, USER_CONFIG_DIR
     
     if not _initialized:
-        # Create config directories
-        os.makedirs(USER_CONFIG_DIR, exist_ok=True)
+        # Lazily create config directories now
+        USER_CONFIG_DIR = ensure_config_dir()
         
         # Make sure all configs are loaded
         engine_config.load()

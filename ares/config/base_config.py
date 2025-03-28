@@ -1,130 +1,218 @@
-"""Base configuration class that other configuration classes inherit from."""
+"""Base configuration classes for Ares Engine."""
 
-import abc
+import os
 import configparser
 from pathlib import Path
-from .config import config
-from ares.utils.paths import USER_CONFIG_DIR
 
-class BaseConfig(abc.ABC):
-    """Abstract base class for all configuration objects."""
+# Use the function instead of direct import to avoid circular dependencies
+from ares.utils.paths import get_user_config_dir
 
-    def __init__(self, config_name="config"):
+class BaseConfig:
+    """Base configuration class used by specialized config classes."""
+    
+    def __init__(self, config_name, section="DEFAULT"):
+        """Initialize with config file name and section.
+        
+        Args:
+            config_name: Name of configuration (used for filename without .ini)
+            section: Section name in the INI file (default: DEFAULT)
+        """
+        # Get user config directory using the function
+        self.config_dir = get_user_config_dir()
+        os.makedirs(self.config_dir, exist_ok=True)
+        
         self.config_name = config_name
-        self.user_path = USER_CONFIG_DIR / f"{config_name}.ini"
-        self.config = config.load(self.config_name)
-    
-    def load(self, override_path=None):
-        """Load configuration. Called for explicit reloading.
+        self.config_file = self.config_dir / f"{config_name}.ini"
+        self.section = section
+        self.parser = configparser.ConfigParser()
+        self.loaded = False
         
-        Args:
-            override_path: Optional path to an override INI file
-            
-        Returns:
-            bool: True if load was successful
-        """
-        self.config = config.load(self.config_name)
+    def ensure_section_exists(self):
+        """Ensure the section exists in the config parser."""
+        if not self.section in self.parser:
+            self.parser[self.section] = {}
         
-        # Apply overrides if provided
-        if override_path:
-            self.load_overrides(override_path)
+    def load(self):
+        """Load configuration from file."""
+        self.ensure_section_exists()
             
-        return True
-    
+        # Try to load from file if it exists
+        if self.config_file.exists():
+            try:
+                self.parser.read(self.config_file)
+                self.loaded = True
+                return True
+            except configparser.Error:
+                print(f"Warning: Could not parse config file {self.config_file}")
+                return False
+        
+        self.loaded = True
+        return True  # Return success even if file doesn't exist
+                    
     def save(self):
-        """Save the current configuration to file."""
-        if self.config:
-            config.save(self.config_name, self.config)
-        return True
-    
-    def get(self, section, option, fallback=None):
-        """Get a string value from the configuration."""
-        return self.config.get(section, option, fallback=fallback)
-    
-    def getint(self, section, option, fallback=None):
-        """Get an integer value from the configuration."""
-        return self.config.getint(section, option, fallback=fallback)
-    
-    def getfloat(self, section, option, fallback=None):
-        """Get a float value from the configuration."""
-        return self.config.getfloat(section, option, fallback=fallback)
-    
-    def getboolean(self, section, option, fallback=None):
-        """Get a boolean value from the configuration."""
-        return self.config.getboolean(section, option, fallback=fallback)
-    
-    def set(self, section, option, value):
-        """Set a configuration value."""
-        if not self.config.has_section(section):
-            self.config.add_section(section)
+        """Save configuration to file."""
+        self.ensure_section_exists()
         
-        self.config.set(section, option, str(value))
-        return True
-        
-    def load_overrides(self, override_file_path):
-        """Load and apply configuration overrides from a specific file.
+        try:
+            os.makedirs(self.config_dir, exist_ok=True)
+            with open(self.config_file, 'w') as config_file:
+                self.parser.write(config_file)
+            return True
+        except (OSError, PermissionError) as e:
+            print(f"Error saving config to {self.config_file}: {e}")
+            return False
+    
+    def get(self, key, default=None, section=None):
+        """Get a configuration value.
         
         Args:
-            override_file_path: Path to the INI file with override values
+            key: Configuration key to retrieve
+            default: Default value to return if key not found
+            section: Section to look in (defaults to self.section)
             
         Returns:
-            dict: Information about which sections/options were overridden
+            Configuration value or default if not found
         """
-        override_file_path = Path(override_file_path)
-        if not override_file_path.exists():
-            return {"overridden": False}
+        if not self.loaded:
+            self.load()
             
-        # Load the override file
-        override_config = configparser.ConfigParser()
-        override_config.read(override_file_path)
+        section = section or self.section
         
-        # Track what was overridden
-        overrides = {
+        if section in self.parser and key in self.parser[section]:
+            return self.parser[section][key]
+        
+        return default
+        
+    def get_bool(self, key, default=False, section=None):
+        """Get a boolean configuration value.
+        
+        Args:
+            key: Configuration key to retrieve
+            default: Default boolean to return if key not found
+            section: Section to look in (defaults to self.section)
+            
+        Returns:
+            bool: Configuration value as boolean
+        """
+        value = self.get(key, str(default), section)
+        return value.lower() in ('true', 'yes', 'y', '1', 'on', 't')
+        
+    def get_int(self, key, default=0, section=None):
+        """Get an integer configuration value.
+        
+        Args:
+            key: Configuration key to retrieve
+            default: Default integer to return if key not found
+            section: Section to look in (defaults to self.section)
+            
+        Returns:
+            int: Configuration value as integer
+        """
+        try:
+            return int(self.get(key, default, section))
+        except ValueError:
+            return default
+        
+    def get_float(self, key, default=0.0, section=None):
+        """Get a float configuration value.
+        
+        Args:
+            key: Configuration key to retrieve
+            default: Default float to return if key not found
+            section: Section to look in (defaults to self.section)
+            
+        Returns:
+            float: Configuration value as float
+        """
+        try:
+            return float(self.get(key, default, section))
+        except ValueError:
+            return default
+        
+    def set(self, key, value, section=None):
+        """Set a configuration value.
+        
+        Args:
+            key: Configuration key to set
+            value: Value to set
+            section: Section to use (defaults to self.section)
+            
+        Returns:
+            bool: Whether the value was set successfully
+        """
+        if not self.loaded:
+            self.load()
+            
+        section = section or self.section
+        
+        # Ensure section exists
+        if not section in self.parser:
+            self.parser[section] = {}
+            
+        # Store value as string
+        self.parser[section][key] = str(value)
+        return True
+        
+    def get_section(self, section=None):
+        """Get all key-value pairs in a section.
+        
+        Args:
+            section: Section name (defaults to self.section)
+            
+        Returns:
+            dict: Dictionary of key-value pairs in the section
+        """
+        if not self.loaded:
+            self.load()
+            
+        section = section or self.section
+        
+        if section in self.parser:
+            return dict(self.parser[section])
+        
+        return {}
+        
+    def load_overrides(self, filename):
+        """Load configuration overrides from an external file.
+        
+        Args:
+            filename: Path to the override file
+            
+        Returns:
+            dict: Dictionary containing:
+                - "overridden": bool indicating if any values were overridden
+                - "section": name of the section that was overridden
+                - "values": dictionary of overridden values
+        """
+        if not self.loaded:
+            self.load()
+            
+        result = {
             "overridden": False,
-            "file": str(override_file_path),
-            "sections": {}
+            "section": self.section,
+            "values": {}
         }
         
-        # Apply overrides
-        for section in override_config.sections():
-            if not self.config.has_section(section):
-                self.config.add_section(section)
-                overrides["sections"][section] = {"added": True, "options": []}
-            else:
-                overrides["sections"][section] = {"added": False, "options": []}
-                
-            for option in override_config[section]:
-                value = override_config[section][option]
-                self.config.set(section, option, value)
-                overrides["sections"][section]["options"].append(option)
-                overrides["overridden"] = True
-                
-        return overrides
-    
-    @abc.abstractmethod
-    def get_override_dict(self):
-        """Get dictionary of important configuration values for this config.
-        
-        This method must be implemented by subclasses to provide the 
-        most important values from their configuration for use in other contexts.
-        
-        Returns:
-            dict: Dictionary of key configuration values
-        """
-        pass
-        
-    @abc.abstractmethod
-    def initialize(self, *args, **kwargs):
-        """Initialize this configuration with any necessary setup.
-        
-        This method must be implemented by subclasses to provide
-        configuration-specific initialization.
-        
-        Args:
-            *args: Variable positional arguments for implementation-specific use
-            **kwargs: Variable keyword arguments for implementation-specific use
+        if not Path(filename).exists():
+            return result
             
-        Returns:
-            bool: True if initialization was successful
-        """
-        pass
+        # Create a new parser for the override file
+        override_parser = configparser.ConfigParser()
+        try:
+            override_parser.read(filename)
+        except configparser.Error:
+            return result
+            
+        # Check if our section exists
+        if not self.section in override_parser:
+            return result
+            
+        # Apply overrides
+        for key, value in override_parser[self.section].items():
+            old_value = self.get(key)
+            self.set(key, value)
+            if old_value != value:
+                result["overridden"] = True
+                result["values"][key] = value
+                
+        return result

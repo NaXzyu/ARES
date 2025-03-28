@@ -30,11 +30,11 @@ METADATA = {
     "url": "https://github.com/naxzyu/ares-engine",
     "classifiers": [
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3",  # Generic Python 3
         "Operating System :: OS Independent"
     ],
     "license": "Apache 2.0",
-    "python_requires": ">=3.12",
+    "python_requires": ">=3.12",  # This will be updated dynamically
     "packages": find_packages(exclude=["examples"]),
     "include_package_data": True,
     "package_data": {
@@ -57,17 +57,43 @@ def import_utils():
     global check_python_version, format_version, REQUIRED_PYTHON_VERSION
     from ares.utils.utils import check_python_version, format_version
     from ares.utils.constants import REQUIRED_PYTHON_VERSION
+    
+    # Update python_requires with the actual required version
+    version_str = format_version(REQUIRED_PYTHON_VERSION)
+    METADATA["python_requires"] = f">={version_str}"
+    
+    # Update classifiers with specific Python version
+    python_classifier = f"Programming Language :: Python :: {version_str}"
+    if python_classifier not in METADATA["classifiers"]:
+        METADATA["classifiers"].append(python_classifier)
 
 def update_metadata():
     """Update metadata with values from package_config if available."""
     global METADATA
     try:
         from ares.config import package_config
+        
+        # Verify that package_config has the required method
+        if not hasattr(package_config, 'get_package_data'):
+            raise RuntimeError("Package configuration is invalid: 'get_package_data' method not found")
+            
         metadata_updates = package_config.get_package_data()
+        if not isinstance(metadata_updates, dict):
+            raise RuntimeError(f"Package configuration returned invalid data type: {type(metadata_updates)}")
+            
         METADATA.update(metadata_updates)
-        print("Loaded package metadata from package_config")
+        
+        # Use proper logging if available, fall back to print if not
+        try:
+            from ares.utils import log
+            log.info("Loaded package metadata from package_config")
+        except ImportError:
+            print("Loaded package metadata from package_config")
+            
     except (ImportError, AttributeError) as e:
-        print(f"Could not load package metadata from package_config: {e}")
+        error_msg = f"Could not load package metadata from package_config: {e}"
+        print(f"Error: {error_msg}")
+        raise RuntimeError(error_msg) from e
 
 def get_python(args=None):
     """Get a validated Python path from arguments or find appropriate version.
@@ -103,10 +129,15 @@ def get_python(args=None):
             output = subprocess.check_output(["py", "-0p"], text=True)
             for line in output.splitlines():
                 line = line.strip()
-                match = re.match(r"^-V:3\.12(?:-64|-32)?\s+(\S+)", line)
+                # Use version_str in the regex pattern
+                match = re.match(f"^-V:{version_str}(?:-64|-32)?\\s+(\\S+)", line)
                 if match:
                     python_path = Path(match.group(1))
-                    print(f"Found Python 3.12 at: {python_path}")
+                    try:
+                        from ares.utils import log
+                        log.info(f"Found Python {version_str} at: {python_path}")
+                    except ImportError:
+                        print(f"Found Python {version_str} at: {python_path}")
                     return python_path
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("Windows py launcher not available or failed.")
@@ -122,8 +153,8 @@ def get_python(args=None):
             )
             version = output.strip()
             
-            # If it's Python 3.12, return the full path
-            if version == "3.12":
+            # If it's the required Python version, return the full path
+            if version == version_str:
                 # Get the full path to the Python executable
                 if os.name == 'nt':
                     output = subprocess.check_output(
@@ -136,14 +167,14 @@ def get_python(args=None):
                         text=True
                     )
                 python_path = Path(output.strip())
-                print(f"Found Python 3.12 at: {python_path}")
+                print(f"Found Python {version_str} at: {python_path}")
                 return python_path
             else:
-                print(f"Found Python {version} at {cmd}, but need 3.12")
+                print(f"Found Python {version} at {cmd}, but need {version_str}")
         except (subprocess.CalledProcessError, FileNotFoundError):
             print(f"Command '{cmd}' not found or failed.")
     
-    print("Error: Could not find Python 3.12+ interpreter.")
+    print(f"Error: Could not find Python {version_str}+ interpreter.")
     return None
 
 
@@ -256,8 +287,12 @@ if __name__ == "__main__":
     # Check if this is being run by pip with a command like egg_info/develop
     if is_pip_command():
         # Update metadata and let setuptools handle it
-        update_metadata()
-        setup(**METADATA)
+        try:
+            update_metadata()
+            setup(**METADATA)
+        except RuntimeError as e:
+            print(f"Fatal error: {e}")
+            sys.exit(1)
     else:
         # Import utils for our custom CLI
         import_utils()
@@ -287,7 +322,7 @@ if __name__ == "__main__":
                 # Import modules for non-clean operations after logging is initialized
                 from ares.utils import log  # noqa: E402
                 from ares.build.build_engine import check_engine_build, build_engine  # noqa: E402
-                from ares.build.build_project import build_project  # noqa: E402
+                from ares.build.project_builder import ProjectBuilder
                 
                 # Ninja is a required dependency for building Ares Engine
                 from ares.build.ninja_compiler import NinjaCompiler  # noqa: E402
@@ -318,14 +353,14 @@ if __name__ == "__main__":
                         else:
                             log.info(f"Using previously built engine from: {ENGINE_BUILD_DIR}")
                         
-                        # Build a project from the specified path
-                        build_project(
+                        # Build a project from the specified path - instantiate and build directly
+                        builder = ProjectBuilder(
                             py_exe=python_exe, 
                             project_path=project_path,
                             output_dir=BUILD_DIR,
-                            configs=CONFIGS,
                             force=args.force
                         )
+                        builder.build()
                     case _:
                         log.error(f"Project path not found: {args.build}")
                         sys.exit(1)

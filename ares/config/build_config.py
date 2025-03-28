@@ -33,11 +33,11 @@ class BuildConfig(BaseConfig):
     
     def should_include_resources(self):
         """Check if resources should be included in builds."""
-        return self.getboolean("resources", "include_resources", True)
+        return self.get_bool("resources", "include_resources", True)
     
     def should_compress_resources(self):
         """Check if resources should be compressed."""
-        return self.getboolean("resources", "compress_resources", True)
+        return self.get_bool("resources", "compress_resources", True)
     
     def get_raw_cython_module_dirs(self):
         """Get the raw Cython module directories string from config."""
@@ -49,8 +49,8 @@ class BuildConfig(BaseConfig):
         from ares.build.cython_compiler import get_cython_module_dirs
         
         return {
-            "parallel": self.getboolean("build", "parallel", True),
-            "inplace": self.getboolean("build", "inplace", True),
+            "parallel": self.get_bool("build", "parallel", True),
+            "inplace": self.get_bool("build", "inplace", True),
             "include_resources": self.should_include_resources(),
             "resource_dir_name": self.get_resource_dir_name(),
             "compress_resources": self.should_compress_resources(),
