@@ -20,35 +20,43 @@ A cross-platform Vulkan game engine with Cython GPU acceleration.
 
 - Python 3.12 or higher
 - C++ compiler (Visual Studio, GCC, Clang)
-- Ninja build system (optional, for parallel builds)
+- Ninja build system (optional, for faster builds)
 
-#### Install from GitHub (recommended)
+### Install from GitHub (recommended)
 
 To install directly from GitHub, run:
 
 ```bash
-pip install git+https://github.com/naxzyu/ares-engine.git
-```
-
-You can also add it to your project's requirements.txt.
-
-### Building
-
-You may also choose to build the engine from the orginal source code from scratch. This is a relatively easy process if you follow the steps below:
-
-#### Using setup.py (recommended for development)
-
-Clone the repository and run the setup utility:
-
-```bash
+# Clone the repository
 git clone https://github.com/naxzyu/ares-engine.git
 cd ares-engine
 
-# Creates a virtual environment automatically.
-python setup.py
+# Create a virtual environment (optional but recommended)
+python -m venv .venv
+.venv\Scripts\activate  # For Linux/macOS: source .venv/bin/activate
 
+# Install in development mode with all dependencies
+pip install -e .
+```
+
+## Building the Engine
+
+```bash
 # Build the engine
-python setup.py --build
+ares build engine
+```
+
+## Building a Project
+
+```bash
+# Build an example project
+ares build examples\hello_world
+
+# Force rebuilding a project
+ares build your\project\path --force
+
+# Cleaning your build
+ares clean
 ```
 
 ## Usage
@@ -84,30 +92,6 @@ while window.running:
 window.close()
 ```
 
-## Configuration
-
-The configuration for Ares Engine is very straight-forward and modular. The Engine configuration is stored in INI files:
-
-- `engine.ini` - Core engine settings
-- `build.ini` - Build and compilation settings
-- `package.ini` - Source code definitions
-
-Settings are automatically loaded at startup, and can be accessed through the configuration API:
-
-```python
-from ares.config import engine_config, build_config
-
-# Get current display resolution
-width, height = engine_config.get_resolution()
-
-# Change fullscreen mode
-engine_config.set_fullscreen(True)
-engine_config.save()  # Save changes
-
-# Get build version
-version = build_config.get_version_string()
-```
-
 ## License
 
 This dataset is licensed under the [Apache 2.0 License](LICENSE)
@@ -118,7 +102,7 @@ Please use the following BibTeX entry to cite this dataset:
 
 ```bibtex
 @software{ares-engine,
-  author = {Kara Rawson, Aimee Chrzanowski},
+  author = {Kara Rawson},
   title = {Ares Engine: A cross-platform Vulkan game engine with Cython GPU acceleration},
   year = {2025},
   howpublished = {\url{https://github.com/NaXzyu/ares-engine}},

@@ -1,28 +1,37 @@
 #!/usr/bin/env python3
-"""General utility functions for the Ares Engine.
+"""General utility functions for the Ares Engine."""
 
-This module provides utility functions for formatting sizes and times,
-computing file hashes, checking Python versions, and managing virtual environments.
-"""
-
-import os
 import hashlib
-import subprocess
-import platform
 import shutil
-from ares.utils.constants import REQUIRED_PYTHON_VERSION
+import subprocess
+import sys
+from pathlib import Path
+
+from ares.utils.const import (
+    CURRENT_PLATFORM,
+    DEFAULT_APP_NAME,
+    ERROR_PYTHON_VERSION,
+    KB,
+    MB,
+    GB,
+    PLATFORM_LINUX,
+    PLATFORM_MACOS,
+    PLATFORM_WINDOWS,
+    REQUIRED_PYTHON_VERSION,
+    REQUIRED_PYTHON_VERSION_STR,
+)
 
 def is_windows():
     """Check if the current platform is Windows."""
-    return os.name == 'nt'
+    return CURRENT_PLATFORM == PLATFORM_WINDOWS
 
 def is_macos():
     """Check if the current platform is macOS."""
-    return platform.system() == "Darwin"
+    return CURRENT_PLATFORM == PLATFORM_MACOS
 
 def is_linux():
     """Check if the current platform is Linux."""
-    return platform.system() == "Linux"
+    return CURRENT_PLATFORM == PLATFORM_LINUX
 
 def format_size(size_bytes):
     """Format a size in bytes to a human-readable string.
@@ -33,10 +42,14 @@ def format_size(size_bytes):
     Returns:
         str: Human-readable size string with units (e.g. "1.23 MB")
     """
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024 or unit == 'GB':
-            return f"{size_bytes:.2f} {unit}"
-        size_bytes /= 1024
+    if size_bytes < KB:
+        return f"{size_bytes:.2f} B"
+    elif size_bytes < MB:
+        return f"{size_bytes/KB:.2f} KB"
+    elif size_bytes < GB:
+        return f"{size_bytes/MB:.2f} MB"
+    else:
+        return f"{size_bytes/GB:.2f} GB"
 
 def format_time(seconds):
     """Format seconds into a human-readable duration string.
@@ -90,6 +103,22 @@ def format_version(version_tuple):
     """
     return '.'.join(map(str, version_tuple))
 
+def get_current_python_version():
+    """Get the current Python version as a tuple.
+    
+    Returns:
+        tuple: Current Python version as (major, minor)
+    """
+    return (sys.version_info.major, sys.version_info.minor)
+
+def is_python_version_compatible():
+    """Check if the current Python version meets requirements.
+    
+    Returns:
+        bool: True if current Python version meets or exceeds the required version
+    """
+    return sys.version_info[:2] >= REQUIRED_PYTHON_VERSION
+
 def check_python_version(python_path, required_version=REQUIRED_PYTHON_VERSION):
     """Check if a Python interpreter meets version requirements.
 
@@ -109,35 +138,27 @@ def check_python_version(python_path, required_version=REQUIRED_PYTHON_VERSION):
     except Exception:
         return False
 
-def detect_existing_venv(project_root):
-    """Detect existing virtual environments in a project directory.
-
-    Searches common virtual environment locations and verifies Python version compatibility.
-
-    Args:
-        project_root: Path to the project root directory to search
-
+def verify_python():
+    """Verify the current Python version meets requirements.
+    
+    Terminates program with error code if version is incompatible.
+    
     Returns:
-        Path: Path to detected virtual environment directory, or None if not found
+        bool: True if version is compatible (program continues)
+        
+    Note: This function will exit the program if incompatible.
     """
-    venv_dirs = [
-        project_root / ".venv",
-        project_root / "venv",
-        project_root / "env",
-        project_root / ".env",
-        project_root / "virtualenv",
-        project_root / ".conda_env"
-    ]
-    for venv_dir in venv_dirs:
-        if not venv_dir.exists():
-            continue
-        if os.name == 'nt':
-            python_exe = venv_dir / "Scripts" / "python.exe"
-        else:
-            python_exe = venv_dir / "bin" / "python"
-        if python_exe.exists() and check_python_version(python_exe):
-            return venv_dir
-    return None
+    current_version = get_current_python_version()
+    current_version_str = format_version(current_version)
+    
+    # Check if the current Python version is compatible
+    if not is_python_version_compatible():
+        print(f"Error: Python {REQUIRED_PYTHON_VERSION_STR}+ is required.")
+        print(f"Current Python version is {current_version_str}.")
+        print(f"Please upgrade Python or use a different interpreter.")
+        sys.exit(ERROR_PYTHON_VERSION)
+    
+    return True
 
 def copy_file_with_logging(source, dest):
     """Copy a file with error logging.
@@ -156,3 +177,21 @@ def copy_file_with_logging(source, dest):
     except Exception as e:
         print(f"Error copying file {source} to {dest}: {e}")
         return False
+
+def get_app_name() -> str:
+    """Get application name from project config or use default.
+    
+    Returns:
+        str: Application name from project config or fallback default
+    """
+    try:
+        # Import here to avoid circular imports
+        from ares.config.project_config import ProjectConfig
+        project_config = ProjectConfig()
+        return project_config.get_product_name()
+    except (ImportError, AttributeError):
+        # Fallback to executable name or default
+        if getattr(sys, 'frozen', False):
+            return Path(sys.executable).stem
+        else:
+            return DEFAULT_APP_NAME

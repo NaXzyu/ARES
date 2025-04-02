@@ -38,7 +38,7 @@ class LoggingConfig(BaseConfig):
         # Ensure logs directory exists
         if logs_dir is None:
             # Use appropriate logs directory based on whether we're in a frozen app
-            logs_dir = Paths.get_logs_dir(for_app=Paths.IS_FROZEN)
+            logs_dir = Paths.get_logs_path(for_app=Paths.IS_FROZEN)
         else:
             logs_dir = Path(logs_dir)
             
