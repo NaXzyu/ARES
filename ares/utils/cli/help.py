@@ -8,11 +8,11 @@ USAGE = "ares [command] [options]"
 # Command descriptions with detailed formatting
 COMMANDS = """
 Commands:
-  build                   Build the engine or a project
+  build <engine|path>     Build the engine or a project
   clean                   Clean up build artifacts
 """
 
-# Options for commands with netstat-style formatting
+# Build command options
 BUILD_OPTIONS = """
 Build options:
   project_path          Path to project directory (defaults to engine)
@@ -20,33 +20,31 @@ Build options:
   --python <path>       Path to specific Python interpreter to use (must be 3.12+)
 """
 
+# Clean command options
 CLEAN_OPTIONS = """
 Clean options:
   No additional options
 """
 
-# Examples section formatted like netstat help
+# Help text for the CLI
 EXAMPLES = """
 Examples:
-  ares build                       Build only the engine package
-  ares build path/to/project       Build a project from specified path
-  ares clean                       Clean up build artifacts
-  ares build --force               Force rebuild all Cython modules and packages
-  ares build --python path/to/python     Use specific Python interpreter
+  ares build engine             Build only the engine package
+  ares build <path>             Build a project from specified path
+  ares build --force            Force rebuild all Cython modules and packages
+  ares build --python <path>    Use specific Python interpreter
+  ares clean                    Clean up build artifacts
 """
 
 def get_main_help():
     """Get the main help text for the CLI."""
-    # Added a newline at the beginning to ensure a blank line appears before the first line of output
     return f"\n{DESCRIPTION}\n\nUsage: {USAGE}\n{COMMANDS}\n{EXAMPLES}"
 
 def get_command_help(command):
     """Get help text for a specific command."""
     if command == "build":
-        # Add newline at the beginning for command help as well
         return f"\n{DESCRIPTION}\n\nUsage: ares build [project_path] [options]\n{BUILD_OPTIONS}\n{EXAMPLES}"
     elif command == "clean":
-        # Add newline at the beginning for command help as well
         return f"\n{DESCRIPTION}\n\nUsage: ares clean\n{CLEAN_OPTIONS}\n{EXAMPLES}"
     else:
         return get_main_help()
