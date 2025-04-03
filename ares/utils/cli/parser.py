@@ -3,6 +3,7 @@
 
 import sys
 import argparse
+from .help import get_main_help, get_command_help
 
 class Parser:
     """Parser for Ares Engine CLI arguments."""
@@ -17,20 +18,20 @@ class Parser:
         parser = argparse.ArgumentParser(
             description="Ares Engine CLI Utility",
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog="""
-Examples:
-  ares build                       Build only the engine package
-  ares build path/to/project       Build a project from specified path
-  ares clean                       Clean up build artifacts
-  ares build --force               Force rebuild all Cython modules and packages
-  ares build --python path/to/python     Use specific Python interpreter (must be 3.12+)
-"""
+            usage="ares [command] [options]",
+            add_help=False  # We'll handle help ourselves
         )
+        
+        # Add help option manually
+        parser.add_argument('-h', '--help', action='store_true', 
+                          help='Show this help message and exit')
+        
         # Create subparsers for different commands
         subparsers = parser.add_subparsers(dest='command', help='Command to execute')
         
         # Build command
-        build_parser = subparsers.add_parser('build', help='Build the engine or a project')
+        build_parser = subparsers.add_parser('build', help='Build the engine or a project', add_help=False)
+        build_parser.add_argument('-h', '--help', action='store_true', help='Show build command help')
         build_parser.add_argument('project_path', nargs='?', default='engine', 
                                 help='Path to project directory (defaults to engine)')
         build_parser.add_argument('--force', action='store_true', 
@@ -39,7 +40,8 @@ Examples:
                                 help='Path to specific Python interpreter to use (must be 3.12+)')
         
         # Clean command
-        clean_parser = subparsers.add_parser('clean', help='Clean build artifacts')
+        clean_parser = subparsers.add_parser('clean', help='Clean build artifacts', add_help=False)
+        clean_parser.add_argument('-h', '--help', action='store_true', help='Show clean command help')
         
         return parser
     
@@ -55,10 +57,24 @@ Examples:
         """
         parser = cls.create_parser()
         
-        # Default to help if no command specified
+        # Handle empty arguments - show main help
         if args is None and len(sys.argv) == 1:
-            parser.print_help()
+            print(get_main_help())
+            sys.exit(1)
+        
+        # Parse arguments but catch help requests
+        parsed_args, unknown = parser.parse_known_args(args)
+        parsed_dict = vars(parsed_args)
+        
+        # Handle help for specific commands
+        if parsed_dict.get('help'):
+            print(get_command_help(parsed_dict.get('command')))
+            sys.exit(0)
+            
+        # Check for unknown arguments
+        if unknown:
+            print(f"Unknown arguments: {' '.join(unknown)}")
+            print(get_command_help(parsed_dict.get('command')))
             sys.exit(1)
             
-        parsed_args = parser.parse_args(args)
-        return vars(parsed_args)
+        return parsed_dict

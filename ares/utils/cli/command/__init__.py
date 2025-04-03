@@ -1,13 +1,12 @@
 """Command modules for Ares Engine CLI operations."""
 
-from .cmd_type import CommandType
-from .command import Command
-from .build_cmd import BuildCommand
-from .clean_cmd import CleanCommand
-
+# Define what this module exports
 __all__ = [
     'CommandType',
-    'Command',
-    'BuildCommand',
-    'CleanCommand'
+    'Command'
 ]
+
+# Import the core command classes
+from .cmd_type import CommandType
+from .command import Command
+# Don't import implementation classes to avoid early initialization

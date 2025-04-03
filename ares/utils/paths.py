@@ -3,7 +3,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, TypeVar, Union
 
 from ares.utils.const import (
     # Directory names
@@ -23,6 +23,42 @@ from ares.utils.const import (
     RENDERER_SUBDIR, SPEC_CHILD_PATH
 )
 from ares.utils.utils import get_app_name, is_macos, is_windows
+
+
+# Define standalone function for config modules to use
+# This is independent of the Paths class to avoid circular imports
+def get_user_config_dir() -> Path:
+    """Get user configuration directory, creating it if needed.
+    
+    Returns:
+        Path: Path to the user configuration directory
+    """
+    app_name = get_app_name()
+    
+    # Determine the base directory based on the platform
+    if is_windows():
+        try:
+            base_dir = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / "AppData" / "Local")))
+            base_dir = base_dir / app_name
+        except (KeyError, TypeError):
+            base_dir = Path.home() / "AppData" / "Local" / app_name
+    elif is_macos():
+        base_dir = Path.home() / "Library" / "Application Support" / app_name
+    else:
+        # Linux and other platforms
+        try:
+            import appdirs
+            base_dir = Path(appdirs.user_data_dir("ares-engine", app_name))
+        except ImportError:
+            base_dir = Path.home() / ".local" / "share" / "ares-engine" / app_name
+    
+    # Build the config directory path
+    config_dir = base_dir / APP_CONFIG_DIR_NAME
+    
+    # Create the directory if it doesn't exist
+    os.makedirs(config_dir, exist_ok=True)
+    
+    return config_dir
 
 
 class Paths:
@@ -47,9 +83,28 @@ class Paths:
         if cls._initialized:
             return
             
-        # Create user data directories if not already created
-        cls.create_project_paths()
+        # Set flag first to prevent recursion
         cls._initialized = True
+        
+        # Pre-compute the project paths to avoid recursive calls
+        project_paths = {
+            "PROJECT_ROOT": cls.PROJECT_ROOT,
+            "APP_DIR": cls.APP_DIR,
+            "BUILD_DIR": cls.PROJECT_ROOT / BUILD_DIR_NAME,
+            "DEV_LOGS_DIR": cls.PROJECT_ROOT / LOGS_DIR_NAME,
+            "ENGINE_BUILD_DIR": cls.PROJECT_ROOT / BUILD_DIR_NAME / ENGINE_DIR_NAME,
+            "CACHE_DIR": cls.PROJECT_ROOT / BUILD_DIR_NAME / CACHE_DIR_NAME
+        }
+        
+        # Cache the project paths
+        cls._project_cache_path = project_paths
+        
+        # Create directories without causing recursive calls
+        for key in ["BUILD_DIR", "DEV_LOGS_DIR", "ENGINE_BUILD_DIR", "CACHE_DIR"]:
+            try:
+                os.makedirs(project_paths[key], exist_ok=True)
+            except (OSError, PermissionError):
+                pass
     
     @classmethod
     def get_user_data_paths(cls, app_name: Optional[str] = None) -> Dict[str, Path]:
@@ -62,7 +117,8 @@ class Paths:
             dict: Dictionary containing paths for different user data purposes
         """
         # Ensure initialized
-        cls._initialize()
+        if not cls._initialized:
+            cls._initialize()
         
         # Use cached results if available
         cache_key = app_name or "default"
@@ -111,26 +167,12 @@ class Paths:
         Returns:
             dict: Dictionary containing paths for project-related directories
         """
-        # Ensure initialized
-        cls._initialize()
+        # Ensure initialized without recursive calls
+        if not cls._initialized:
+            cls._initialize()
         
-        # Use cached results if available
-        if cls._project_cache_path is not None:
-            return cls._project_cache_path
-            
-        # Create the project paths
-        paths = {
-            "PROJECT_ROOT": cls.PROJECT_ROOT,
-            "APP_DIR": cls.APP_DIR,
-            "BUILD_DIR": cls.PROJECT_ROOT / BUILD_DIR_NAME,
-            "DEV_LOGS_DIR": cls.PROJECT_ROOT / LOGS_DIR_NAME,
-            "ENGINE_BUILD_DIR": cls.PROJECT_ROOT / BUILD_DIR_NAME / ENGINE_DIR_NAME,
-            "CACHE_DIR": cls.PROJECT_ROOT / BUILD_DIR_NAME / CACHE_DIR_NAME
-        }
-        
-        # Cache the result
-        cls._project_cache_path = paths
-        return paths
+        # Return the cached paths
+        return cls._project_cache_path
 
 
     @classmethod
@@ -159,15 +201,12 @@ class Paths:
         Returns:
             dict: Dictionary of created directories
         """
-        dirs = cls.get_project_paths()
-        # Only create these specific directories
-        keys = ["BUILD_DIR", "DEV_LOGS_DIR", "ENGINE_BUILD_DIR", "CACHE_DIR"]
-        for key in keys:
-            try:
-                os.makedirs(dirs[key], exist_ok=True)
-            except (OSError, PermissionError):
-                pass
-        return dirs
+        # Make sure we're initialized
+        if not cls._initialized:
+            cls._initialize()
+            
+        # Return the cached project paths
+        return cls._project_cache_path
 
 
     @classmethod
@@ -249,10 +288,8 @@ class Paths:
     @classmethod
     def get_user_config_path(cls) -> Path:
         """Get the user config directory without risking circular imports."""
-        dirs = cls.get_user_data_paths(get_app_name())
-        config_dir = dirs["CONFIG_DIR"]
-        os.makedirs(config_dir, exist_ok=True)
-        return config_dir
+        # Use the standalone function to avoid circular imports
+        return get_user_config_dir()
     
 
     @classmethod

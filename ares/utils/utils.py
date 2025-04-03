@@ -178,18 +178,42 @@ def copy_file_with_logging(source, dest):
         print(f"Error copying file {source} to {dest}: {e}")
         return False
 
+# Flag to detect recursive calls for get_app_name
+_loading_config = False
+
 def get_app_name() -> str:
     """Get application name from project config or use default.
     
     Returns:
         str: Application name from project config or fallback default
     """
+    global _loading_config
+    
+    # If we're already in the process of loading configuration,
+    # don't try to load project_config again to avoid recursion
+    if _loading_config:
+        if getattr(sys, 'frozen', False):
+            return Path(sys.executable).stem
+        else:
+            return DEFAULT_APP_NAME
+    
     try:
+        # Set flag to prevent recursion
+        _loading_config = True
+        
         # Import here to avoid circular imports
         from ares.config.project_config import ProjectConfig
         project_config = ProjectConfig()
-        return project_config.get_product_name()
-    except (ImportError, AttributeError):
+        app_name = project_config.get_product_name()
+        
+        # Reset flag
+        _loading_config = False
+        
+        return app_name
+    except (ImportError, AttributeError, RecursionError):
+        # Reset flag
+        _loading_config = False
+        
         # Fallback to executable name or default
         if getattr(sys, 'frozen', False):
             return Path(sys.executable).stem

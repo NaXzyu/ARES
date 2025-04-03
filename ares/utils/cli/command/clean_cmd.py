@@ -1,10 +1,6 @@
 """Clean command implementation for Ares Engine CLI."""
 
 from typing import Any, Dict
-
-from ares.utils.build.build_cleaner import BuildCleaner
-from ares.utils.const import ERROR_RUNTIME, SUCCESS
-from ares.utils.log import log
 from .cmd_type import CommandType
 from .command import Command
 
@@ -19,11 +15,18 @@ class CleanCommand(Command):
     @classmethod
     def execute(cls, args: Dict[str, Any]) -> int:
         """Execute the clean command."""
+        # Only import heavy modules when executing the command
         try:
-            log.info("Starting clean operation...")
-            BuildCleaner.clean_project() 
-            log.info("Clean operation completed successfully")
+            from ares.utils.build.build_cleaner import BuildCleaner
+            from ares.utils.const import ERROR_RUNTIME, SUCCESS
+            
+            # Simple log output that doesn't require full logging initialization
+            print("Starting clean operation...")
+            
+            BuildCleaner.clean_project()
+            
+            print("Clean operation completed successfully")
             return SUCCESS
         except Exception as e:
-            log.error(f"Error cleaning project: {e}")
+            print(f"Error cleaning project: {e}")
             return ERROR_RUNTIME

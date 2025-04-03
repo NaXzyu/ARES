@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Command-line interface for Ares Engine operations."""
 
-from ares.utils.cli.parser import Parser
-
 class Router:
     """Core CLI functionality handler for Ares Engine."""
     
@@ -17,20 +15,21 @@ class Router:
             int: Exit code (0 for success, non-zero for failure)
         """
         command = args.get('command', '')
-        parser = Parser.create_parser()
         
         try:
-            match command:
-                case 'build':
-                    from ares.utils.cli.command.build_cmd import BuildCommand
-                    return BuildCommand.execute(args)
-                case 'clean':
-                    from ares.utils.cli.command.clean_cmd import CleanCommand
-                    return CleanCommand.execute(args)
-                case _:
-                    print("\nAvailable commands:")
-                    print(parser.format_help().split("Examples:")[1])
-                    return 1
+            # Only import needed command handlers when routing
+            if command == 'build':
+                from .command.build_cmd import BuildCommand
+                return BuildCommand.execute(args)
+            elif command == 'clean':
+                from .command.clean_cmd import CleanCommand
+                return CleanCommand.execute(args)
+            else:
+                from .parser import Parser
+                parser = Parser.create_parser()
+                print("\nAvailable commands:")
+                print(parser.format_help().split("Examples:")[1])
+                return 1
                 
         except ImportError as e:
             print(f"Error importing command module: {e}")
@@ -46,6 +45,7 @@ class Router:
         Returns:
             int: Exit code (0 for success, non-zero for failure)
         """
+        from .parser import Parser
         args = Parser.parse_args()
         
         # Check if any keyword arguments are provided
