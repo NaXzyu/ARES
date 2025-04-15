@@ -462,6 +462,17 @@ class ContextAwareLogger:
         for line in lines_to_show:
             log_func(f"{indent}{line}")
 
+    def log_build_paths(self, output_path, cache_path, build_cache_file):
+        """Log key build paths for verifying engine build configuration."""
+        from ares.utils.paths import Paths  # ensure Paths is available
+        log.info("Build Paths:")
+        log.info(f"  Project Root: {Paths.PROJECT_ROOT}")
+        log.info(f"  Engine Build Directory (Output): {output_path}")
+        log.info(f"  Cache Directory: {cache_path}")
+        log.info(f"  Build Cache File: {build_cache_file}")
+        log.info(f"  Build Log File: {Paths.get_build_log_file()}")
+        log.info(f"  Development Logs Directory: {Paths.get_dev_logs_path()}")
+
 class Logger:
     """Singleton logger manager for the Ares Engine."""
     

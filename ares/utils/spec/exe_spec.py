@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, Union
 
 from ares.utils.const import SPEC_EXTENSION, EXE_SPEC_TEMPLATE
 from ares.utils.paths import Paths
-from ares.utils.utils import verify_python
+from ares.utils.build.build_utils import BuildUtils
 
 from .spec import Spec
 
@@ -27,8 +27,7 @@ class ExeSpec(Spec):
             console_mode: Whether to show console window
             onefile: Whether to build a single-file executable
         """
-        # Verify Python version before proceeding
-        verify_python()
+        BuildUtils.verify_python()
         
         super().__init__(output_dir, name)
         self.main_script = Path(main_script) if main_script else None

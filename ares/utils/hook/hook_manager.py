@@ -18,7 +18,7 @@ class HookManager:
         HookType.RUNTIME_LOGGING, # Logging system needs to be set up next
         HookType.ARES,            # Ares engine hook for common imports
         HookType.SDL2,            # SDL2 initialization
-        HookType.CMODULES   # Cython modules loaded last
+        HookType.CMODULES         # Cython modules loaded last
     ]
     
     @classmethod
@@ -55,28 +55,21 @@ class HookManager:
         
         Args:
             hooks_path: Optional path where hook files are located
-                      (defaults to ares/hooks directory)
+                      (defaults to ares hooks directory)
                       
         Returns:
             list: List of paths to hook files in proper execution order
         """
         # Determine hooks directory path
         if hooks_path is None:
-            try:
-                # Get ares package path
-                import ares
-                ares_path = Path(ares.__file__).parent
-                hooks_path = ares_path / "hooks"
-            except ImportError:
-                log.error("Error: Could not import ares package to find hooks directory")
-                return []
+            hooks_path = Paths.get_hooks_path()
         else:
             hooks_path = Path(hooks_path)
             
         # Check for all required hooks in the defined execution order
         runtime_hooks = []
         for hook_type in cls.HOOK_EXECUTION_ORDER:
-            hook_path = hooks_path / cls.get_hook_filename(hook_type)
+            hook_path = Paths.get_hook_file(cls.get_hook_filename(hook_type))
             if hook_path.exists():
                 runtime_hooks.append(str(hook_path.resolve()))
             else:
@@ -90,49 +83,35 @@ class HookManager:
         
         Args:
             hooks_path: Optional path where hook files are located
-                      (defaults to ares/hooks directory)
+                      (defaults to ares hooks directory)
                       
         Returns:
             tuple: (bool, list) - Success flag and list of missing hooks
         """
-        # Determine hooks directory path
-        if hooks_path is None:
-            try:
-                # Get ares package path
-                import ares
-                ares_path = Path(ares.__file__).parent
-                hooks_path = ares_path / "hooks"
-            except ImportError:
-                log.error("Error: Could not import ares package to find hooks directory")
-                return False, [hook_type for hook_type in HookType]
-        else:
-            hooks_path = Path(hooks_path)
-        
         # Check for all required hooks
         missing_hooks = []
         for hook_type in HookType:
-            hook_path = hooks_path / cls.get_hook_filename(hook_type)
+            hook_path = Paths.get_hook_file(cls.get_hook_filename(hook_type))
             if not hook_path.exists():
                 missing_hooks.append(hook_type)
         
         return len(missing_hooks) == 0, missing_hooks
     
     @classmethod
-    def load_hook(cls, hooks_dir, source_hooks_dir, hook_type):
-        """Load a specific hook from source directory to destination.
+    def load_hook(cls, hooks_dir, hook_type):
+        """Load a specific hook to destination.
         
         Args:
             hooks_dir: Destination directory for created hooks
-            source_hooks_dir: Source directory containing hook files
             hook_type: HookType enum value for the hook to load
             
         Returns:
             Path: Path to the created hook file, or None if not found
         """
-        source_path = source_hooks_dir / cls.get_hook_filename(hook_type)
+        source_path = Paths.get_hook_file(cls.get_hook_filename(hook_type))
         
         if not source_path.exists():
-            log.warn(f"Warning: Hook file {cls.get_hook_filename(hook_type)} not found in {source_hooks_dir}")
+            log.warning(f"Hook file {cls.get_hook_filename(hook_type)} not found in {Paths.get_hooks_path()}")
             return None
             
         # Create PyInstaller-compatible hook name
@@ -145,7 +124,7 @@ class HookManager:
         except Exception as e:
             log.error(f"Error creating hook {cls.get_hook_pyinstaller_name(hook_type)}: {e}")
             return None
-
+    
     @classmethod
     def create_runtime_hooks(cls, output_dir):
         """Create PyInstaller runtime hooks for Ares Engine in the correct order.
@@ -159,12 +138,11 @@ class HookManager:
         hooks_dir = Path(output_dir) / "hooks"
         os.makedirs(hooks_dir, exist_ok=True)
         
-        hooks = []  # Use Paths API for hooks directory
-        source_hooks_dir = Paths.get_hooks_path()
+        hooks = []
         
         # Load hooks in the defined execution order
         for hook_type in cls.HOOK_EXECUTION_ORDER:
-            hook_path = cls.load_hook(hooks_dir, source_hooks_dir, hook_type)
+            hook_path = cls.load_hook(hooks_dir, hook_type)
             if hook_path:
                 hooks.append(hook_path)
                 log.info(f"Added hook {hook_type} for execution")
@@ -188,15 +166,12 @@ class HookManager:
         os.makedirs(hooks_dir, exist_ok=True)
         
         hooks = []
-
-        # Use Paths API for hooks directory
-        source_hooks_dir = Paths.get_hooks_path()
         
         # Load only the essential hooks for basic functionality
         basic_hook_types = [HookType.SDL2, HookType.CMODULES]
         
         for hook_type in basic_hook_types:
-            hook_path = cls.load_hook(hooks_dir, source_hooks_dir, hook_type)
+            hook_path = cls.load_hook(hooks_dir, hook_type)
             if hook_path:
                 hooks.append(hook_path)
                 log.info(f"Added basic hook {hook_type} for execution")

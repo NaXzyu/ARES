@@ -3,16 +3,6 @@
 from __future__ import annotations
 
 from .log import log
-from .paths import Paths, paths
-from .utils import (
-    format_size, 
-    format_time, 
-    is_windows, 
-    is_macos, 
-    is_linux,
-    compute_file_hash,
-    get_app_name,
-)
 from .const import (
     REQUIRED_PYTHON_VERSION,
     PLATFORM_WINDOWS,
@@ -25,18 +15,15 @@ from .const import (
     DEFAULT_ENGINE_NAME,
 )
 
+from .paths import Paths, paths
+from .build.build_utils import BuildUtils
+
 __all__ = [
     # Utilities
     'log',
     'Paths',
     'paths',
-    'format_size',
-    'format_time',
-    'is_windows',
-    'is_macos', 
-    'is_linux',
-    'compute_file_hash',
-    'get_app_name',
+    'BuildUtils',
     
     # Constants
     'REQUIRED_PYTHON_VERSION',

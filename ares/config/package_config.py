@@ -1,7 +1,6 @@
 """Package configuration for Ares Engine."""
 
 import platform
-from pathlib import Path
 
 from .base_config import BaseConfig
 
@@ -78,15 +77,6 @@ class PackageConfig(BaseConfig):
             str: Path to the splash screen image or None if not set
         """
         return self.get("splash_screen")
-        
-    def get_extensions(self):
-        """Get the list of file extensions to include in package data.
-        
-        Returns:
-            list: List of file extensions
-        """
-        extensions_str = self.get("extensions", ".py,.pyx,.ini,.txt")
-        return [ext.strip() for ext in extensions_str.split(",")]
     
     def get_extension_modules(self):
         """Get extension modules configuration.
@@ -166,8 +156,7 @@ class PackageConfig(BaseConfig):
             "onefile": self.is_onefile_enabled(),
             "compression_level": self.get_compression_level(),
             "include_debug_files": self.should_include_debug_files(),
-            "create_installer": self.should_create_installer(),
-            "extensions": self.get_extensions()
+            "create_installer": self.should_create_installer()
         }
     
     def initialize(self, *args, **kwargs):

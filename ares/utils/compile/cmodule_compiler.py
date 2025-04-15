@@ -1,125 +1,115 @@
-"""Module compiler for handling Cython module compilation in Ares Engine."""
+"""Cython module compiler for Ares Engine."""
 
 import os
 import sys
-from pathlib import Path
-from typing import Any, Dict, List, Union
 
-from ares.utils.const import ERROR_BUILD_FAILED, SUCCESS
-from ares.utils.log import log
+from ares.utils import log
 from ares.utils.paths import Paths
-from ares.utils.build.build_cache import BuildCache
 
-from .cmodule_manager import CModuleManager
-from .ext_manager import ExtManager
-from .utils import (
-    filter_compiler_flags,
-    generate_setup_file,
-    get_compiler_directives,
-    run_subprocess,
-)
+from .compile_utils import CompileUtils
 
 class CModuleCompiler:
-    """Handles compilation of Cython modules for Ares Engine."""
+    """Cython module compiler for Ares Engine."""
     
     @classmethod
-    def _run_build_process(cls, 
-                          python_exe: Union[str, Path], 
-                          extensions_to_build: List[Any], 
-                          compiler_directives: Dict[str, Any], 
-                          build_args: List[str], 
-                          build_log_path: Path) -> int:
-        """Run the build process for Cython extensions.
+    def compile(cls, python_exe=None, output_dir=None, force=False, configs=None):
+        """Compile Cython modules for the project.
         
+        Args:
+            python_exe: Python executable to use for compilation
+            output_dir: Output directory for compiled modules
+            force: Force recompilation of all modules
+            configs: Configuration dictionary
+            
         Returns:
-            int: Status code (SUCCESS or ERROR_BUILD_FAILED)
+            bool: Whether compilation was successful
+            
+        Raises:
+            RuntimeError: If compilation fails
         """
-        temp_setup = Paths.get_cache_path() / "temp_setup.py"
+        # Use the current Python executable if not specified
+        if not python_exe:
+            python_exe = sys.executable
+            
+        # Use build/engine directory if not specified
+        if not output_dir:
+            output_dir = Paths.get_project_paths()["ENGINE_BUILD_DIR"]
+            
+        # Create output directory
+        os.makedirs(output_dir, exist_ok=True)
         
+        # Get cython module directories
         try:
-            generate_setup_file(extensions_to_build, compiler_directives, temp_setup)
-            
-            if extensions_to_build:
-                run_cmd = [str(python_exe), str(temp_setup)]
-                run_cmd.extend(build_args)
-            
-                run_subprocess(run_cmd, build_log_path)
+            # Guard against None paths
+            try:
+                cython_dirs = Paths.get_cython_module_path()
+                if not cython_dirs:
+                    raise ValueError("No Cython module directories defined")
+            except Exception as e:
+                log.error(f"Error getting Cython module paths: {e}")
+                cython_dirs = Paths.get_default_cython_paths()
+                if not cython_dirs:
+                    raise ValueError("No default Cython module directories available")
                 
-                # Use the BuildCache class instead of direct functions
-                build_cache = BuildCache.get_instance()
-                build_cache.cache["rebuilt_modules"] = True
-                build_cache.save()
+            # Check if modules are already compiled
+            modules_exist = CompileUtils.check_modules_in_dirs(cython_dirs)
+            
+            # Skip compilation if modules already exist and force is False
+            if modules_exist and not force:
+                log.info("Compiled modules found, skipping compilation")
+                return True
                 
-                return SUCCESS
-            return SUCCESS  # No extensions to build is still a success
+            if not modules_exist:
+                log.info("No compiled modules found. Forcing compilation.")
+                force = True
+                
+            # Get extension definitions
+            extra_args = None if not configs else configs.get("compiler_args")
+            extensions = CompileUtils.get_extensions(extra_args)
+            
+            # Check which extensions need rebuilding
+            extensions_to_build = CompileUtils.check_file_changes(extensions, force)
+            
+            # If no extensions need rebuilding, we're done
+            if not extensions_to_build:
+                log.info("No changed Cython modules to build")
+                return True
+                
+            # Log the compilation task
+            log.info(f"Compiling {len(extensions_to_build)}/{len(extensions)} Cython modules...")
+            
+            # Generate compiler directives
+            directives = CompileUtils.get_compiler_directives(configs)
+            
+            # Generate setup file - handle possible None return            
+            setup_path = CompileUtils.generate_setup_file(extensions_to_build, directives, output_dir)
+            if setup_path is None or not setup_path.exists():
+                log.error("Failed to generate setup file for compilation")
+                raise RuntimeError("Failed to generate setup file for compilation")
+            
+            # Determine build log path
+            build_log = Paths.get_build_log_file()
+            
+            # Create build command
+            build_cmd = [
+                str(python_exe), 
+                str(setup_path), 
+                "build_ext", 
+                "--inplace"
+            ]
+            
+            # Run build command with subprocess - handle possible None values
+            if setup_path and build_log:
+                CompileUtils.run_subprocess(build_cmd, build_log)
+            else:
+                log.error("Missing setup_path or build_log, cannot proceed with compilation")
+                raise RuntimeError("Missing required paths for compilation")
+            
+            # Verify compilation was successful
+            modules_found = CompileUtils.check_compiled_modules(output_dir)
+            
+            return modules_found
+            
         except Exception as e:
-            log.error(f"Error during build process: {e}")
-            return ERROR_BUILD_FAILED
-        finally:
-            if temp_setup.exists():
-                os.unlink(temp_setup)
-    
-    @classmethod
-    def compile(cls, 
-                python_exe: Union[str, Path], 
-                build_dir: Path, 
-                build_log_path: Path, 
-                force: bool = False) -> bool:
-        """Compile the Cython modules for the project."""
-        from Cython.Build import cythonize
-        
-        sys.path.insert(0, str(Paths.PROJECT_ROOT))
-        from ares.config import initialize, build_config, compiler_config
-        initialize()
-        
-        # Get compiler directives using shared utility function
-        compiler_directives = get_compiler_directives(build_config)
-        
-        inplace = build_config.get_bool("build", "inplace", True)
-        compiler_flags = compiler_config.get_compiler_flags() or []
-        
-        # Filter compiler flags using shared utility function
-        compiler_flags = filter_compiler_flags(compiler_flags)
-        
-        build_args = ['build_ext']
-        if inplace:
-            build_args.append('--inplace')
-        
-        # Get extensions to compile
-        all_extensions = ExtManager.get_extensions(extra_compile_args=compiler_flags)
-        
-        # Check if modules already exist
-        cython_dirs = Paths.get_cython_module_path()
-        modules_already_exist = CModuleManager.check_modules_in_dirs(cython_dirs)
-        
-        # Force rebuilding if no modules exist
-        if not modules_already_exist:
-            log.info("No compiled modules found. Forcing compilation.")
-            force = True
-        
-        # Check which files have changed and need rebuilding
-        extensions_to_build = ExtManager.check_file_changes(all_extensions, force)
-        
-        if not extensions_to_build:
-            log.info("No Cython files have changed. Skipping compilation.")
-            return CModuleManager.check_compiled_modules(build_dir)
-        
-        log.info(f"Compiling {len(extensions_to_build)}/{len(all_extensions)} Cython modules...")
-        
-        # Create temp directory for the build
-        if not build_dir.exists():
-            os.makedirs(build_dir, exist_ok=True)
-            
-        # Run the build process
-        old_argv = sys.argv.copy()
-        try:
-            status = cls._run_build_process(python_exe, extensions_to_build, compiler_directives, 
-                                           build_args, build_log_path)
-            if status != SUCCESS:
-                log.error("Build process failed")
-                return False
-        finally:
-            sys.argv = old_argv
-        
-        # Verify compiled modules
-        return CModuleManager.check_compiled_modules(build_dir)
+            log.error(f"Error compiling Cython modules: {e}")
+            raise RuntimeError(f"Error compiling Cython modules: {e}")

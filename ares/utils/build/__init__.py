@@ -9,25 +9,15 @@ from .build_telemetry import BuildTelemetry
 from .engine_builder import EngineBuilder
 from .exe_builder import ExeBuilder
 from .project_builder import ProjectBuilder
-from .utils import (
-    compute_file_hash,
-    find_cython_binaries,
-    find_main_script,
-    find_sdl2_dlls,
-    hash_config,
-)
+from .build_utils import BuildUtils
 
 __all__ = [
-    'BuildCache',
+'BuildCache',
     'BuildCleaner',
     'BuildState',
     'BuildTelemetry',
     'EngineBuilder',
     'ExeBuilder',
     'ProjectBuilder',
-    'compute_file_hash',
-    'find_cython_binaries',
-    'find_main_script',
-    'find_sdl2_dlls',
-    'hash_config',
+    'BuildUtils',
 ]

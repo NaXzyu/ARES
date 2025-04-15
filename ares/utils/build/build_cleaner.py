@@ -5,12 +5,13 @@ import os
 import shutil
 import time
 import stat
+import errno
 from pathlib import Path
 from typing import Callable
 
 from ares.utils.log import log
 from ares.utils.paths import Paths
-from ares.utils.utils import format_time
+from ares.utils.build.build_utils import BuildUtils
 
 class BuildCleaner:
     """Manages cleaning of build artifacts for Ares Engine."""
@@ -18,7 +19,7 @@ class BuildCleaner:
     @classmethod
     def clean_project(cls) -> None:
         """Clean up build artifacts from the project directory."""
-        print("Cleaning up build artifacts...")
+        log.info("Cleaning up build artifacts...")
         
         # Start timing
         start_time = time.time()
@@ -58,17 +59,17 @@ class BuildCleaner:
         for path in paths_to_clean:
             try:
                 if path.is_dir():
-                    print(f"Removing directory: {path}")
+                    log.info(f"Removing directory: {path}")
                     shutil.rmtree(path, onerror=cls.handle_remove_readonly)
                 elif path.exists():
-                    print(f"Removing file: {path}")
+                    log.info(f"Removing file: {path}")
                     path.unlink()
             except Exception as e:
-                print(f"WARNING: Could not remove {path}: {e}")
+                log.warn(f"WARNING: Could not remove {path}: {e}")
         
         # Log the cleaned paths
         elapsed_time = time.time() - start_time
-        print(f"Clean completed successfully in {format_time(elapsed_time)}.")
+        log.info(f"Clean completed successfully in {BuildUtils.format_time(elapsed_time)}.")
 
     @staticmethod
     def handle_remove_readonly(func: Callable, path: str, exc: tuple) -> None:
@@ -79,12 +80,35 @@ class BuildCleaner:
             path: The path being processed
             exc: The exception info (type, value, traceback)
         """
-        if os.name == 'nt':
-            if func in (os.unlink, os.remove, os.rmdir) and exc[1].errno == 5:  # Access Denied
-                os.chmod(path, stat.S_IWRITE)
-                func(path)
-            else:
-                raise
+        try:
+            excvalue = exc[1]
+            if func in (os.rmdir, os.remove, os.unlink) and excvalue.errno == errno.EACCES:
+                # Change file permissions
+                os.chmod(path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                func(path)  # Retry the operation
+                return
+        except Exception:
+            pass
+        raise exc[1]
+
+    @classmethod
+    def clean_directory(cls, directory: Path) -> None:
+        """Clean a build directory completely.
+
+        Args:
+            directory: Path to the directory to clean
+        """
+        if not directory.exists():
+            log.info(f"Directory not found, nothing to clean: {directory}")
+            return
+
+        log.info(f"Cleaning directory: {directory}")
+        
+        try:
+            shutil.rmtree(directory, onerror=cls.handle_remove_readonly)
+            log.info(f"Successfully removed directory: {directory}")
+        except Exception as e:
+            log.error(f"Error removing directory {directory}: {e}")
 
     @classmethod
     def clean_egg_info(cls) -> None:

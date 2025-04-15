@@ -8,7 +8,6 @@ version = "0.1.0"
 description = "A cross-platform Vulkan game engine with Cython GPU acceleration"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "Apache 2.0"}
 authors = [
     {name = "k. rawson", email = "rawsonkara@gmail.com"}
 ]
@@ -22,6 +21,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Development Status :: 3 - Alpha",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "License :: OSI Approved :: Apache Software License 2.0",
 ]
 
 dependencies = [
@@ -58,8 +58,17 @@ include-package-data = true
 zip-safe = false
 
 [tool.setuptools.package-data]
+"ares" = ["*.py", "*.pyi", "*.pyx", "*.pxd"]
 "ares.hooks" = ["*.py"]
 "ares.config.ini" = ["*.ini"]
+"ares.core" = ["*.pyd", "*.so", "*.cp*-*.pyd", "*.cpython-*.so"]
+"ares.math" = ["*.pyd", "*.so", "*.cp*-*.pyd", "*.cpython-*.so"] 
+"ares.physics" = ["*.pyd", "*.so", "*.cp*-*.pyd", "*.cpython-*.so"]
+"ares.renderer" = ["*.pyd", "*.so", "*.cp*-*.pyd", "*.cpython-*.so"]
+"ares.utils" = ["spec/*.spec"]  
+
+[tool.setuptools.package-dir]
+"ares" = "ares"
 
 [project.scripts]
 ares = "ares.main:main"

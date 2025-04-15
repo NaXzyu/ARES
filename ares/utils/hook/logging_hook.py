@@ -5,10 +5,10 @@ import logging
 import traceback
 from pathlib import Path
 
+from ares.utils.build.build_utils import BuildUtils
 from ares.utils.const import (
     DEFAULT_LOG_FORMAT,
     DEFAULT_DATE_FORMAT,
-    DEFAULT_ENGINE_NAME,
     ERROR_RUNTIME
 )
 
@@ -66,7 +66,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     tb_lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
     tb_text = ''.join(tb_lines)
     
-    # Use our log module directly - no fallback needed
+    # Use our log module directly
     from ares.utils import log
     log.error(f"UNHANDLED EXCEPTION: {exc_type.__name__}: {exc_value}")
     for line in tb_text.splitlines():
@@ -97,12 +97,15 @@ def setup_runtime_logging():
         # We're running in a normal Python environment
         exe_dir = Path(__file__).parent
         meipass_dir = None
-        app_name = Path(sys.argv[0]).stem if sys.argv else DEFAULT_ENGINE_NAME
+        
+        # Use the BuildUtils class for consistent app name resolution
+        from ares.utils.build.build_utils import BuildUtils
+        app_name = BuildUtils.get_app_name()
     
     # Get paths from centralized Paths utility
     from ares.utils.paths import Paths
     
-    # Create app directories structure 
+    # Create app directories structure with the consistent app_name
     app_dirs = Paths.create_app_paths(app_name)
     logs_dir = app_dirs["LOGS_DIR"]
     config_dir = app_dirs["CONFIG_DIR"]
@@ -130,7 +133,8 @@ def setup_runtime_logging():
     # Initialize logging using the already configured logging object
     if ConfigType.LOGGING in CONFIGS and CONFIGS[ConfigType.LOGGING]:
         CONFIGS[ConfigType.LOGGING].initialize(logs_dir, log_filename=f"{app_name}.log")
-        print(f"Advanced logging configuration initialized for {app_name}")
+        from ares.utils import log
+        log.info(f"Advanced logging configuration initialized for {app_name}")
     else:
         raise RuntimeError("Logging configuration not available in CONFIGS")
     

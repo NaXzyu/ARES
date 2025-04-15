@@ -1,168 +1,189 @@
-"""Build cache management for Ares Engine build system."""
-
+"""Build cache for tracking file changes during build process."""
+import datetime
 import json
 import os
+import threading
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Any, Dict
 
 from ares.utils.log import log
 from ares.utils.paths import Paths
 
+# Add this module-level function to allow direct import
+def _preprocess_paths_for_json(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert Path objects to strings for JSON serialization.
+    
+    Args:
+        config: Configuration dictionary that may contain Path objects
+        
+    Returns:
+        Dict with Path objects converted to strings
+    """
+    # Get the singleton instance of BuildCache
+    instance = BuildCache.get_instance()
+    # Call the instance method to do the actual processing
+    return instance._preprocess_paths_for_json(config)
 
 class BuildCache:
-    """Manages build cache for incremental builds using singleton pattern."""
+    """Cache for storing file hashes and other build state information."""
     
-    # Singleton instance
+    # Class variables for singleton pattern
     _instance = None
-    _initialized = False
-
-    # Cache data
-    _cache = None
-    _cache_file = None
-    _cache_dir = None
+    _lock = threading.Lock()
     
-    def __new__(cls, cache_file: Optional[Path] = None, cache_dir: Optional[Path] = None):
-        """Create or return the singleton instance."""
-        if cls._instance is None:
-            cls._instance = super(BuildCache, cls).__new__(cls)
-            cls._instance._init(cache_file, cache_dir)
-        elif cache_file is not None or cache_dir is not None:
-            cls._instance._init(cache_file, cache_dir)
-        return cls._instance
-    
-    def _init(self, cache_file: Optional[Path] = None, cache_dir: Optional[Path] = None):
-        """Initialize the build cache (internal method).
+    def __init__(self):
+        """Initialize build cache with empty data."""
+        self.cache = {
+            "last_build": None,
+            "files": {},
+            "rebuild_flag": False
+        }
+        self.cache_file = None
+        self.dirty = False
         
-        Args:
-            cache_file: Optional custom cache file path
-            cache_dir: Optional custom cache directory path
-        """
-        if not BuildCache._initialized or cache_file is not None or cache_dir is not None:
-            BuildCache._cache_file = cache_file or Paths.get_build_cache_file()
-            BuildCache._cache_dir = cache_dir or Paths.get_cache_path()
-            BuildCache._cache = self.load()
-            BuildCache._initialized = True
-    
-    @property
-    def cache(self) -> Dict[str, Any]:
-        """Access the cache data."""
-        return BuildCache._cache
-    
-    @cache.setter
-    def cache(self, value: Dict[str, Any]):
-        """Set the cache data."""
-        BuildCache._cache = value
-    
-    @property
-    def cache_file(self) -> Path:
-        """Access the cache file path."""
-        return BuildCache._cache_file
-    
-    @property
-    def cache_dir(self) -> Path:
-        """Access the cache directory path."""
-        return BuildCache._cache_dir
-    
-    def load(self) -> Dict[str, Any]:
-        """Load the build cache from the cache file if it exists.
-        
-        Returns:
-            The loaded cache as a dictionary, or a new empty cache if loading failed
-        """
-        if not BuildCache._cache_file.exists():
-            return {"files": {}, "last_build": None}
-        
-        try:
-            with open(BuildCache._cache_file, "r") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            log.warn(f"Warning: Failed to load build cache: {e}")
-            return {"files": {}, "last_build": None}
-    
-    def save(self) -> str:
-        """Save the build cache to the cache file.
-        
-        Returns:
-            ISO format timestamp of when the cache was saved
-        """
-        import datetime
-        
-        # Update the last build timestamp
-        timestamp = datetime.datetime.now().isoformat()
-        BuildCache._cache["last_build"] = timestamp
-        
-        os.makedirs(BuildCache._cache_dir, exist_ok=True)
-        try:
-            # Preprocess paths for JSON serialization
-            processed_cache = self._preprocess_paths_for_json(BuildCache._cache)
-            with open(BuildCache._cache_file, "w") as f:
-                json.dump(processed_cache, f, indent=2)
-        except IOError as e:
-            log.warn(f"Warning: Failed to save build cache: {e}")
-        
-        return timestamp
-    
-    @staticmethod
-    def _preprocess_paths_for_json(obj: Any) -> Any:
-        """Convert any Path objects in a nested structure to strings for JSON serialization.
-        
-        Args:
-            obj: The object to process (can be dict, list, Path, etc.)
-            
-        Returns:
-            The processed object with Path objects converted to strings
-        """
-        if isinstance(obj, Path):
-            return str(obj)
-        elif isinstance(obj, dict):
-            return {k: BuildCache._preprocess_paths_for_json(v) for k, v in obj.items()}
-        elif isinstance(obj, (list, tuple)):
-            return [BuildCache._preprocess_paths_for_json(item) for item in obj]
-        else:
-            return obj
-    
-    @classmethod
-    def set_cache_paths(cls, build_dir: Path) -> tuple[Path, Path]:
-        """Update the cache paths based on a custom build directory.
-        
-        Args:
-            build_dir: Custom build directory path
-            
-        Returns:
-            Tuple containing (cache_dir, cache_file) paths
-        """
-        cache_dir = Paths.get_cache_path()
-        build_cache_file = Paths.get_build_cache_file()
-        
-        # Update the singleton paths
-        if cls._instance:
-            cls._instance._init(build_cache_file, cache_dir)
-            
-        return cache_dir, build_cache_file
-    
-    def check_and_reset_rebuild_status(self) -> bool:
-        """Check if modules were rebuilt and reset the status in the cache.
-        
-        Returns:
-            bool: True if modules were rebuilt, False otherwise
-        """
-        # Check if modules were rebuilt
-        modules_rebuilt = BuildCache._cache.get("rebuilt_modules", False)
-        
-        # Reset the status in the cache
-        if modules_rebuilt:
-            BuildCache._cache["rebuilt_modules"] = False
-            self.save()
-        
-        return modules_rebuilt
-    
     @classmethod
     def get_instance(cls) -> 'BuildCache':
-        """Get or create the singleton instance.
+        """Get the singleton instance of BuildCache."""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls()
+                    cls._instance.cache_file = Paths.get_build_cache_file()
+                    cls._instance.load()
+        return cls._instance
+    
+    @classmethod
+    def set_cache_paths(cls, output_dir: Path) -> tuple:
+        """Set up cache paths based on output directory.
+        
+        Args:
+            output_dir: Directory to place the cache file in
+            
+        Returns:
+            tuple: (cache_dir, cache_file) paths
+        """
+        if not output_dir:
+            cache_dir = Paths.get_cache_path()
+        else:
+            cache_dir = output_dir / "cache"
+        
+        # Ensure cache directory exists
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # Define cache file path
+        cache_file = cache_dir / "build_cache.json"
+        
+        # Update the instance if it exists
+        if cls._instance is not None:
+            cls._instance.cache_file = cache_file
+        
+        return cache_dir, cache_file
+    
+    def load(self) -> Dict:
+        """Load cache from file if it exists.
         
         Returns:
-            The singleton BuildCache instance
+            dict: Loaded cache data or empty cache
         """
-        if cls._instance is None:
-            cls._instance = BuildCache()
-        return cls._instance
+        if not self.cache_file or not os.path.exists(self.cache_file):
+            return self.cache
+        
+        try:
+            with open(self.cache_file, 'r') as f:
+                self.cache = json.load(f)
+            self.dirty = False
+        except (json.JSONDecodeError, OSError) as e:
+            log.warn(f"Error loading build cache: {e}")
+            # Initialize with empty cache
+            self.cache = {
+                "last_build": None,
+                "files": {},
+                "rebuild_flag": False
+            }
+            self.dirty = True
+            
+        # Initialize the rebuild flag if it doesn't exist
+        if "rebuild_flag" not in self.cache:
+            self.cache["rebuild_flag"] = False
+            self.dirty = True
+            
+        # Initialize the files dict if it doesn't exist
+        if "files" not in self.cache:
+            self.cache["files"] = {}
+            self.dirty = True
+            
+        return self.cache
+    
+    def save(self) -> bool:
+        """Save cache to file.
+        
+        Returns:
+            bool: True if saved successfully, False otherwise
+        """
+        if not self.cache_file:
+            return False
+            
+        # Create parent directory if it doesn't exist
+        os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
+        
+        # Update last build time
+        self.cache["last_build"] = datetime.datetime.now().isoformat()
+        
+        try:
+            with open(self.cache_file, 'w') as f:
+                json.dump(self.cache, f, indent=2)
+            self.dirty = False
+            return True
+        except OSError as e:
+            log.error(f"Error saving build cache: {e}")
+            return False
+    
+    def check_and_reset_rebuild_status(self) -> bool:
+        """Check if a rebuild has been requested and reset the flag.
+        
+        Returns:
+            bool: True if rebuild was requested, False otherwise
+        """
+        rebuild = self.cache.get("rebuild_flag", False)
+        
+        # Reset the flag if it was set
+        if rebuild:
+            self.cache["rebuild_flag"] = False
+            self.dirty = True
+            self.save()
+            
+        return rebuild
+    
+    def set_rebuild_needed(self) -> None:
+        """Mark that a rebuild is needed."""
+        self.cache["rebuild_flag"] = True
+        self.dirty = True
+        self.save()
+    
+    def _preprocess_paths_for_json(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert Path objects to strings for JSON serialization.
+        
+        Args:
+            config: Configuration dictionary that may contain Path objects
+            
+        Returns:
+            Dict with Path objects converted to strings
+        """
+        processed_config = {}
+        
+        for key, value in config.items():
+            if isinstance(value, Path):
+                processed_config[key] = str(value)
+            elif isinstance(value, dict):
+                processed_config[key] = self._preprocess_paths_for_json(value)
+            elif isinstance(value, list):
+                processed_config[key] = [
+                    str(item) if isinstance(item, Path) else 
+                    self._preprocess_paths_for_json(item) if isinstance(item, dict) else 
+                    item 
+                    for item in value
+                ]
+            else:
+                processed_config[key] = value
+                
+        return processed_config

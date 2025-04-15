@@ -4,8 +4,11 @@ import sys
 import os
 from typing import Dict, Any
 
+from ares.utils.log import log
+
 from .command import Command
 from .cmd_type import CommandType
+
 
 class BuildCommand(Command):
     """Command for building the engine or projects."""
@@ -26,8 +29,19 @@ class BuildCommand(Command):
         # Get build parameters
         project_path = args.get('project_path', ENGINE_DIR_NAME)
         force = args.get('force', False)
-        python_path = args.get('python', sys.executable)
+        python_path = args.get('python')  # Remove default here
         
+        # Make absolutely sure we have a valid Python executable
+        if python_path is None:
+            python_path = sys.executable
+            
+        if python_path is None:  # If sys.executable is somehow None
+            import shutil
+            python_path = shutil.which("python") or shutil.which("python3")
+            if not python_path:
+                print("Error: Could not find a valid Python executable")
+                return ERROR_INVALID_CONFIGURATION
+                
         print(f"Using Python executable: {python_path}")
         
         # Determine what to build
@@ -95,11 +109,23 @@ class BuildCommand(Command):
             if cls._build_engine(python_path, force) != SUCCESS:
                 return ERROR_BUILD_FAILED
         
-        # Build the project
+        # Initialize configs before creating builders
+        configs = get_global_configs()
+        if not configs:
+            from ares.config import initialize
+            initialize()
+            configs = get_global_configs()
+            
+        if not configs:
+            log.error("Failed to initialize configuration system")
+            return ERROR_INVALID_CONFIGURATION
+
+        # Now create the builder with initialized configs
         builder = ProjectBuilder(
             py_exe=python_path,
             project_path=project_path,
             output_dir=Paths.get_build_path(),
             force=force
         )
+        
         return SUCCESS if builder.build() else ERROR_BUILD_FAILED

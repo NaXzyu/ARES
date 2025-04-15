@@ -7,7 +7,7 @@ from typing import List, Tuple, Union
 
 from ares.utils import log
 from ares.utils.paths import Paths
-from ares.utils.utils import format_time
+from ares.utils.build.build_utils import BuildUtils
 
 class BuildTelemetry:
     """Manages build telemetry and reporting for Ares Engine."""
@@ -30,7 +30,7 @@ class BuildTelemetry:
         """Log build completion information to the build log file."""
         log.log_to_file(
             build_log_file,
-            f"Build completed\nBuild duration: {format_time(build_duration)}\nBuild artifacts:",
+            f"Build completed\nBuild duration: {BuildUtils.format_time(build_duration)}\nBuild artifacts:",
             add_timestamp=True,
             add_newlines=False
         )
@@ -44,10 +44,9 @@ class BuildTelemetry:
         """
         path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
         wheel_files = Paths.find_wheel_files(path)
-        sdist_files = Paths.find_sdist_files(path)
         
         return [(file.name, Paths.get_formatted_file_size(file)) 
-                for file in wheel_files + sdist_files]
+                for file in wheel_files]
     
     @classmethod
     def log_artifacts(cls, artifacts: List[Tuple[str, str]], log_level: str = "info") -> None:
@@ -85,16 +84,15 @@ class BuildTelemetry:
         """Display a comprehensive build summary to console."""
         path = Path(output_dir) if not isinstance(output_dir, Path) else output_dir
         wheel_files = Paths.find_wheel_files(path)
-        sdist_files = Paths.find_sdist_files(path)
         
         log.info("="*50)
         log.info(" BUILD SUMMARY ".center(50, "="))
         log.info("="*50)
-        log.info(f"Build time:      {format_time(duration)}")
+        log.info(f"Build time:      {BuildUtils.format_time(duration)}")
         log.info(f"Build log:       {build_log_file}")
         log.info(f"Package:         {path}")
         log.info("Build artifacts:")
-        for file in wheel_files + sdist_files:
+        for file in wheel_files:
             log.info(f"  - {file.name} ({Paths.get_formatted_file_size(file)})")
         log.info("="*50)
         
@@ -126,7 +124,7 @@ class BuildTelemetry:
         # Write build summary to log
         summary_text = (
             f"Build completed\n"
-            f"Build duration: {format_time(build_duration)}\n"
+            f"Build duration: {BuildUtils.format_time(build_duration)}\n"
             f"Executable size: {size_str} ({exe_size:,} bytes)\n"
             f"Project name: {name}\n"
             f"Executable path: {target_exe}"
@@ -137,7 +135,7 @@ class BuildTelemetry:
         log.info("="*50)
         log.info(" BUILD SUMMARY ".center(50, "="))
         log.info("="*50)
-        log.info(f"Build time:      {format_time(build_duration)}")
+        log.info(f"Build time:      {BuildUtils.format_time(build_duration)}")
         log.info(f"Executable size: {size_str}")
         log.info(f"Executable path: {target_exe}")
         log.info(f"Build log:       {build_log_file}")

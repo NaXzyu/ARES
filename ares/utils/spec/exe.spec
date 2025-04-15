@@ -19,12 +19,12 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # Verify Python version meets requirements
-from ares.utils.utils import verify_python_version
-verify_python_version()
+from ares.utils.build.build_utils import BuildUtils
+BuildUtils.verify_python()
 
 # Get runtime hooks in proper execution order using HookManager
 from ares.utils.hook.hook_manager import HookManager
-hooks_path = Paths.get_hooks_dir()
+hooks_path = Paths.get_hooks_path()
 runtime_hooks = HookManager.get_runtime_hooks(hooks_path)
 
 # Ensure the hooks are listed in the correct order for proper initialization

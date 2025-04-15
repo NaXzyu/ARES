@@ -11,7 +11,8 @@ import os
 
 # Define standard paths
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG_DIR = PROJECT_ROOT / "ares" / "ini"
+# TODO this should use config.py
+DEFAULT_CONFIG_DIR = PROJECT_ROOT / "ares" / "config" / "ini"
 
 # Import user paths function from paths module to avoid circular imports
 from ares.utils.paths import get_user_config_dir
@@ -19,7 +20,7 @@ CONFIG_FILES_DIR = DEFAULT_CONFIG_DIR
 
 # Create config directories lazily - don't call at import time
 def ensure_config_dir():
-    """Ensure the user config directory exists."""
+    """Ensure the user config directory exists.""" 
     user_config_dir = get_user_config_dir()
     os.makedirs(user_config_dir, exist_ok=True)
     return user_config_dir

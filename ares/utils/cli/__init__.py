@@ -10,7 +10,6 @@ __all__ = [
     'get_command_help'
 ]
 
-# Only import what's needed at import time - don't import command implementations
 from .parser import Parser
 from .router import Router
 from .command.command import Command

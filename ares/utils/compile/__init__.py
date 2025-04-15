@@ -16,18 +16,7 @@ from .ninja_compiler import NinjaCompiler
 from .ext_manager import ExtManager
 from .cmodule_manager import CModuleManager
 from .cmodule_compiler import CModuleCompiler
-from .utils import (
-    generate_setup_file,
-    filter_compiler_flags,
-    run_subprocess,
-    has_compiled_modules,
-    find_compiled_module_files,
-    search_lib_dirs_in_locations,
-    copy_module_file,
-    scan_and_copy_modules,
-    get_compiler_directives,
-    parse_extension_spec
-)
+from .compile_utils import CompileUtils
 
 __all__ = [
     # Main compilation classes
@@ -35,18 +24,7 @@ __all__ = [
     "CModuleManager",
     "ExtManager",
     "NinjaCompiler",
-    
-    # Utility functions
-    "copy_module_file",
-    "find_compiled_module_files",
-    "filter_compiler_flags",
-    "generate_setup_file",
-    "get_compiler_directives",
-    "has_compiled_modules",
-    "parse_extension_spec",
-    "run_subprocess",
-    "scan_and_copy_modules",
-    "search_lib_dirs_in_locations",
+    "CompileUtils",
     
     # Constants
     "PYD_EXTENSION",

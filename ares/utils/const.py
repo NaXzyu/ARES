@@ -30,7 +30,6 @@ SO_EXTENSION = '.so'
 PYTHON_EXT = '.py'
 C_EXTENSION = '.c'
 WHEEL_EXTENSION = '.whl'
-SDIST_EXTENSION = '.tar.gz'
 SPEC_EXTENSION = '.spec'
 EXE_SPEC_TEMPLATE = f"exe{SPEC_EXTENSION}"
 PYX_EXTENSION = '.pyx'  # Cython source file
@@ -56,7 +55,7 @@ MB = 1024 * 1024
 GB = 1024 * 1024 * 1024
 
 # Default package name
-DEFAULT_ENGINE_NAME = "AresEngine"
+DEFAULT_ENGINE_NAME = "Ares"
 DEFAULT_CYTHON_MODULE_NAME = "ares_cython_modules"
 
 # Build system constants
@@ -120,7 +119,6 @@ DEFAULT_PRODUCT_NAME = "ares-engine"
 
 # Path patterns and globs
 WHEEL_SEARCH_PATTERN = "ares-*.whl"
-SDIST_SEARCH_PATTERN = "*.tar.gz"
 COMPILED_MODULE_PATTERNS = ["*.pyd", "*.so", "*.cp*-*.pyd", "*.cpython-*.so"]
 
 # Directory structure constants
@@ -134,11 +132,8 @@ SPEC_CHILD_PATH = "utils/spec"
 
 # Engine builder constants
 ENGINE_BUILDER_WHEEL_COMMAND = ["wheel", ".", "-w"]
-ENGINE_BUILD_SOURCE_COMMAND = ["sdist"]
 ENGINE_SOURCE_PACKAGE_NAME = "ares"
 SETUP_FILE_NAME = "setup.py"
 
 # Build log section headers
 BUILD_LOG_WHEEL_HEADER = "Wheel Build Output"
-BUILD_LOG_CYTHON_HEADER = "Cython Compilation Output"
-BUILD_LOG_SDIST_HEADER = "Source Distribution Output"

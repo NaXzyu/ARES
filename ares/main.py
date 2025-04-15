@@ -10,11 +10,11 @@ def main():
         int: Exit code (0 for success, non-zero for error)
     """
     # Defer imports until they're needed to avoid unnecessary initialization
-    from ares.utils.utils import verify_python
+    from ares.utils import BuildUtils
     from ares.utils.cli.parser import Parser
     
     # Verify Python version
-    verify_python()
+    BuildUtils.verify_python()
     
     # Parse arguments first
     args = Parser.parse_args()
@@ -22,7 +22,16 @@ def main():
     # Only import Router if we need to handle a command
     if args.get('command'):
         from ares.utils.cli.router import Router
-        return Router.route(args)
+        try:
+            return Router.route(args)
+        except KeyError as e:
+            if str(e) == "'dll_path'":
+                print("ERROR: SDL2 DLL path configuration is missing.")
+                print("Please ensure SDL2 is properly installed and configured in your environment.")
+                print("You may need to set the SDL2_PATH environment variable or install the SDL2 development libraries.")
+                return 1
+            else:
+                raise
     
     return 0
 

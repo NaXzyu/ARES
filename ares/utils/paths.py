@@ -3,7 +3,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Optional, TypeVar, Union
+from typing import Dict, Optional
 
 from ares.utils.const import (
     # Directory names
@@ -16,14 +16,12 @@ from ares.utils.const import (
     BUILD_CACHE_FILE, BUILD_LOG_FILE, DEFAULT_LOG_FILE,
     
     # Path patterns and search patterns
-    COMPILED_MODULE_PATTERNS, SDIST_SEARCH_PATTERN, WHEEL_SEARCH_PATTERN,
+    COMPILED_MODULE_PATTERNS, WHEEL_SEARCH_PATTERN,
     
     # Project subdirectories
     ARES_CHILD_PATH, CORE_SUBDIR, MATH_SUBDIR, PHYSICS_SUBDIR,
     RENDERER_SUBDIR, SPEC_CHILD_PATH
 )
-from ares.utils.utils import get_app_name, is_macos, is_windows
-
 
 # Define standalone function for config modules to use
 # This is independent of the Paths class to avoid circular imports
@@ -33,16 +31,19 @@ def get_user_config_dir() -> Path:
     Returns:
         Path: Path to the user configuration directory
     """
-    app_name = get_app_name()
+    from ares.utils.build.build_utils import BuildUtils
+
+    # Get the app name consistently
+    app_name = BuildUtils.get_app_name()
     
     # Determine the base directory based on the platform
-    if is_windows():
+    if BuildUtils.is_windows():
         try:
             base_dir = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / "AppData" / "Local")))
-            base_dir = base_dir / app_name
+            base_dir = base_dir / app_name  # Use app_name directly, not hardcoded
         except (KeyError, TypeError):
             base_dir = Path.home() / "AppData" / "Local" / app_name
-    elif is_macos():
+    elif BuildUtils.is_macos():
         base_dir = Path.home() / "Library" / "Application Support" / app_name
     else:
         # Linux and other platforms
@@ -116,6 +117,8 @@ class Paths:
         Returns:
             dict: Dictionary containing paths for different user data purposes
         """
+        from ares.utils.build.build_utils import BuildUtils
+
         # Ensure initialized
         if not cls._initialized:
             cls._initialize()
@@ -126,16 +129,16 @@ class Paths:
             return cls._user_dirs_cache[cache_key]
             
         if app_name is None:
-            app_name = get_app_name()
+            app_name = BuildUtils.get_app_name()
         
         # Determine the base directory based on the platform
-        if is_windows():
+        if BuildUtils.is_windows():
             try:
                 base_dir = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / "AppData" / "Local")))
                 base_dir = base_dir / app_name
             except (KeyError, TypeError):
                 base_dir = Path.home() / "AppData" / "Local" / app_name
-        elif is_macos():
+        elif BuildUtils.is_macos():
             base_dir = Path.home() / "Library" / "Application Support" / app_name
         else:
             # Linux and other platforms
@@ -210,12 +213,12 @@ class Paths:
 
 
     @classmethod
-    def get_ini_path(cls) -> Path:
+    def get_ini_dir(cls) -> Path:
         """Get the directory containing INI configuration files."""
         if cls.IS_FROZEN:
             return Path(sys._MEIPASS) / ARES_CHILD_PATH / CONFIG_INI_DIR_NAME
         else:
-            return cls.PROJECT_ROOT / ARES_CHILD_PATH / CONFIG_INI_DIR_NAME
+            return cls.PROJECT_ROOT / ARES_CHILD_PATH / "config" / CONFIG_INI_DIR_NAME
     
 
     @classmethod
@@ -228,7 +231,7 @@ class Paths:
         Returns:
             Path: Path to the INI file in the frozen app or development tree
         """
-        return cls.get_ini_path() / filename
+        return cls.get_ini_dir() / filename
     
 
     @classmethod
@@ -269,8 +272,8 @@ class Paths:
     def get_runtime_log_file(cls, app_name: Optional[str] = None) -> Path:
         """Get the path to the runtime log file."""
         if cls.IS_FROZEN:
-            # For runtime, use app name and app logs directory
-            app_name = app_name or get_app_name()
+            from ares.utils import BuildUtils
+            app_name = app_name or BuildUtils.get_app_name()
             return cls.get_log_file(f"{app_name}.log", True, app_name)
         else:
             # For development, use engine.log in project logs directory
@@ -363,26 +366,6 @@ class Paths:
 
 
     @classmethod
-    def find_sdist_files(cls, path=None, name_prefix="ares-"):
-        """Find source distribution package files in the specified directory.
-        
-        Args:
-            directory: Directory to search for source distribution files (default: build directory)
-            name_prefix: Optional prefix for the filename (default: "ares-")
-            
-        Returns:
-            list: List of Path objects for source distribution files
-        """
-        if path is None:
-            path = cls.get_build_path()
-        else:
-            path = Path(path)
-            
-        pattern = f"{name_prefix}{SDIST_SEARCH_PATTERN}"
-        return list(path.glob(pattern))
-
-
-    @classmethod
     def get_dist_path(cls) -> Path:
         """Get the distribution directory path within the project."""
         return cls.PROJECT_ROOT / DIST_PATH_NAME
@@ -398,12 +381,11 @@ class Paths:
         Returns:
             str: Human-readable formatted file size (e.g., "1.25 MB")
         """
-        from ares.utils.utils import format_size
-        import os
-        
         try:
+            from ares.utils.build.build_utils import BuildUtils
+
             size_bytes = os.path.getsize(file_path)
-            return format_size(size_bytes)
+            return BuildUtils.format_size(size_bytes)
         except (OSError, FileNotFoundError) as e:
             from ares.utils import log
             log.warn(f"Error getting size of {file_path}: {e}")
@@ -449,7 +431,7 @@ class Paths:
         Returns:
             Path: Path to the INI file
         """
-        return cls.PROJECT_ROOT / ARES_CHILD_PATH / INI_DIR_NAME / filename
+        return cls.PROJECT_ROOT / ARES_CHILD_PATH / "config" / INI_DIR_NAME / filename
 
 
     @classmethod
@@ -555,7 +537,7 @@ class Paths:
         
         # Try to read from build.ini file
         ini_path = cls.get_ini_path("build.ini")
-        if ini_path.exists():
+        if ini_path and ini_path.exists():  # Add None check
             import configparser
             parser = configparser.ConfigParser()
             parser.read(ini_path)
@@ -591,7 +573,7 @@ class Paths:
         Returns:
             Path: Path to the hooks directory
         """
-        return cls.PROJECT_ROOT / ARES_CHILD_PATH / HOOKS_PATH_NAME
+        return cls.PROJECT_ROOT / ARES_CHILD_PATH / "utils" / "hook"
     
     @classmethod
     def get_hook_file(cls, hook_name: str) -> Path:
@@ -709,6 +691,10 @@ class Paths:
         path = build_dir / EXECUTABLE_OUTPUT_DIR_NAME
         os.makedirs(path, exist_ok=True)
         return path
+
+    @classmethod
+    def get_engine_build_dir(cls) -> Path:
+        return cls.PROJECT_ROOT / "build" / "engine"
 
 
 # Initialize the Paths class to set up directories

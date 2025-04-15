@@ -45,8 +45,8 @@ class BuildConfig(BaseConfig):
 
     def get_override_dict(self):
         """Get dictionary of important configuration values."""
-        # Import here to avoid circular imports
-        from ares.build.cython_compiler import get_cython_module_dirs
+        # Import Paths instead of non-existent cython_compiler
+        from ares.utils.paths import Paths
         
         return {
             "parallel": self.get_bool("build", "parallel", True),
@@ -54,7 +54,7 @@ class BuildConfig(BaseConfig):
             "include_resources": self.should_include_resources(),
             "resource_dir_name": self.get_resource_dir_name(),
             "compress_resources": self.should_compress_resources(),
-            "cython_module_dirs": get_cython_module_dirs()
+            "cython_module_dirs": Paths.get_cython_module_path()
         }
     
     def initialize(self, *args, **kwargs):

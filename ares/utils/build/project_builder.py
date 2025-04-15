@@ -1,17 +1,16 @@
 """Build script for creating projects that use the Ares engine."""
-
 import os
 
 from ares.config import CONFIGS
 from ares.config.config_types import ConfigType
 from ares.utils import log
+from ares.utils.build.build_cache import BuildCache
 from ares.utils.build.build_cleaner import BuildCleaner
 from ares.utils.build.build_state import BuildState
-from ares.utils.build.build_cache import BuildCache
+from ares.utils.build.build_utils import BuildUtils
 from ares.utils.build.exe_builder import ExeBuilder
-from ares.utils.build.utils import find_main_script
-from ares.utils.paths import Paths
 from ares.utils.const import ENGINE_WHEEL_PATTERN
+from ares.utils.paths import Paths
 
 class ProjectBuilder:
     """Builds Ares Engine projects."""
@@ -157,14 +156,14 @@ class ProjectBuilder:
         log.info(f"Using Ares Engine hooks from: {hooks_dir}")
             
         # Make sure we're referencing the correct hook_ares.py file
-        hook_path = Paths.get_hook_file("hook_ares")
+        hook_path = Paths.get_hook_file("ares_hook")
         if hook_path.exists():
-            log.info(f"Found hook_ares.py at {hook_path}")
+            log.info(f"Found ares_hook.py at {hook_path}")
         else:
-            raise RuntimeError(f"hook_ares.py not found at {hook_path}")
+            raise RuntimeError(f"ares_hook.py not found at {hook_path}")
         
         # Find the main script by looking for entry points
-        main_script = find_main_script(project_source_dir)
+        main_script = BuildUtils.find_main_script(project_source_dir)
         if not main_script:
             raise RuntimeError(f"Error: No entry point found in {project_source_dir}. ")
 
@@ -186,7 +185,7 @@ class ProjectBuilder:
                 python_exe=self.py_exe,
                 script_path=main_script,
                 output_dir=build_dir,
-                name=self.product_name,  # Using product_name here ensures consistent naming
+                name=self.product_name,
                 resources_dir=resources_dir,
                 console_mode=CONFIGS[ConfigType.PACKAGE].is_console_enabled(),
                 onefile=CONFIGS[ConfigType.PACKAGE].is_onefile_enabled()

@@ -6,7 +6,7 @@ from setuptools.command.build_ext import build_ext
 
 from ares.utils.const import ERROR_INVALID_CONFIGURATION
 from ares.utils.paths import Paths
-from ares.utils.utils import verify_python
+from ares.utils.build.build_utils import BuildUtils
 
 class NinjaCompiler(build_ext):
     """Custom build_ext command that verifies Python version and uses Ninja."""
@@ -16,7 +16,7 @@ class NinjaCompiler(build_ext):
         super().finalize_options()
         
         # Check Python version before proceeding
-        verify_python()
+        BuildUtils.verify_python()
         
         # Get compiler flags from compiler_config
         try:

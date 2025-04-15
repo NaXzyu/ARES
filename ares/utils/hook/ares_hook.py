@@ -29,7 +29,7 @@ def collect_ares_files():
     ares_path = get_ares_path()
     
     # Walk through the package
-    for root, dirs, files in os.walk(ares_path):
+    for root, _, files in os.walk(ares_path):
         # Skip __pycache__ directories
         if "__pycache__" in root:
             continue
@@ -68,15 +68,15 @@ hiddenimports = [
     'ares.config.config_types',
     'ares.config',
     'ares.config.base_config',
+    
+    # Utils
     'ares.utils.log',
     'ares.utils.paths',
     'ares.utils.const',
-    'ares.utils.utils',
-    'ares.utils.debug_utils',
     
-    # Hook modules - consistently using new naming convention
-    'ares.hooks.configs_hook',
-    'ares.hooks.logging_hook',
-    'ares.hooks.sdl2_hook',
-    'ares.hooks.cython_hook'
+    # Hook modules - updated paths to utils.hook 
+    'ares.utils.hook.configs_hook',
+    'ares.utils.hook.logging_hook',
+    'ares.utils.hook.sdl2_hook',
+    'ares.utils.hook.cython_hook'
 ]

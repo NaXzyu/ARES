@@ -3,10 +3,11 @@
 import os
 import json
 import datetime
+import hashlib
 from pathlib import Path
 
 from ares.utils import log
-from ares.utils.build.utils import compute_file_hash
+from ares.utils.build.build_utils import BuildUtils
 
 class BuildState:
     """Tracks build state for incremental builds."""
@@ -63,67 +64,59 @@ class BuildState:
             log.warn(f"Warning: Could not save build state: {e}")
             return False
     
-    def should_rebuild(self, config_override=None):
-        """Check if project should be rebuilt."""
-        # Case 1: No previous build
-        if not self.state_file.exists() or not self.state["last_build_time"]:
-            return True, "First build or missing state file"
+    def should_rebuild(self, config):
+        """Check if the build needs to be rebuilt.
         
-        # Case 2: Executable not found
-        exe_extension = ".exe" if os.name == "nt" else ""
-        executable_path = self.build_dir / "out" / f"{self.name}{exe_extension}"
-        
-        if not executable_path.exists():
-            return True, f"Executable not found: {executable_path}"
-        
-        # Case 3: Config changed
-        if config_override:
-            # Convert config_override to a JSON string for comparison
-            from ares.utils.build.build_cache import _preprocess_paths_for_json
+        Args:
+            config: Configuration to check for changes
             
-            # Preprocess paths in config_override to ensure consistent comparison
-            processed_config = _preprocess_paths_for_json(config_override)
-            current_config = json.dumps(processed_config, sort_keys=True)
+        Returns:
+            tuple: (rebuild_needed, reason)
+        """
+        if not self.state["last_build_time"]:
+            return True, "No previous build exists"
             
-            # Convert stored config to a JSON string for comparison
-            stored_config = json.dumps(self.state["config"], sort_keys=True)
+        if not self.state_file.exists():
+            return True, "No build state file exists"
             
-            if current_config != stored_config:
-                return True, "Configuration changed"
+        # Force a rebuild if config is None
+        if config is None:
+            return True, "No configuration provided"
         
-        # Case 4: Source files changed
-        extensions = ['.py', '.pyx', '.png', '.jpg', '.wav', '.mp3', '.json', '.tmx', '.tsx', '.ini']
+        # Create a more robust function to sanitize all Path objects in the config
+        def sanitize_paths(obj):
+            if isinstance(obj, Path):
+                return str(obj)
+            elif isinstance(obj, dict):
+                return {k: sanitize_paths(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [sanitize_paths(item) for item in obj]
+            else:
+                return obj
         
-        # Check for changes in tracked source files
-        for ext in extensions:
-            for file_path in self.source_dir.glob(f"**/*{ext}"):
-                if file_path.is_file():
-                    # Skip any .git directories
-                    if ".git" in str(file_path):
-                        continue
-                        
-                    try:
-                        rel_path = file_path.relative_to(self.source_dir)
-                        rel_path_str = str(rel_path)
-                        file_hash = compute_file_hash(file_path)
-                        
-                        # Check if file is new or changed
-                        if rel_path_str not in self.state["files"] or self.state["files"][rel_path_str] != file_hash:
-                            return True, f"Source file changed: {rel_path}"
-                    except Exception as e:
-                        log.warn(f"Error checking file {file_path}: {e}")
-                        # Skip this file for now
-                        return True, f"Error checking file {file_path}"
+        # Apply our robust sanitizer to ensure no Path objects remain
+        serializable_config = sanitize_paths(config)
         
-        # No changes detected
-        return False, "No changes detected"
-    
+        try:
+            # Now it should be safe to serialize
+            current_config = json.dumps(serializable_config, sort_keys=True)
+            current_config_hash = hashlib.md5(current_config.encode()).hexdigest()
+            
+            if current_config_hash != self.state.get("config_hash"):
+                return True, "Configuration has changed"
+                
+            return False, "No changes detected"
+        except TypeError as e:
+            # If serialization still fails, log the error and force a rebuild
+            log.error(f"Error serializing configuration: {e}")
+            return True, f"Configuration serialization error: {e}"
+
     def mark_successful_build(self, config_override=None):
         """Mark a successful build, updating state.
         
         Args:
             config_override: Optional configuration to store
-            
+        
         Returns:
             bool: Whether state was successfully saved
         """
@@ -147,8 +140,11 @@ class BuildState:
                 else:
                     processed_config[key] = value
             self.state["config"] = processed_config
+            # Compute and store config hash
+            config_json = json.dumps(processed_config, sort_keys=True)
+            self.state["config_hash"] = hashlib.md5(config_json.encode()).hexdigest()
         
-        # Update file hashes
+        # Update file hashes:
         tracked_extensions = ['.py', '.pyx', '.png', '.jpg', '.wav', '.mp3', '.json', '.tmx', '.tsx', '.ini']
         
         # Clear previous file hashes
@@ -161,10 +157,9 @@ class BuildState:
                     # Skip any .git directories
                     if ".git" in str(file_path):
                         continue
-                        
                     try:
                         rel_path = file_path.relative_to(self.source_dir)
-                        file_hash = compute_file_hash(file_path)
+                        file_hash = BuildUtils.compute_file_hash(file_path)
                         # Store the hash in the state
                         self.state["files"][str(rel_path)] = file_hash
                     except Exception as e:
