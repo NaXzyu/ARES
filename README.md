@@ -1,67 +1,70 @@
-# Ares Engine
+# ARES
 
-A cross-platform Vulkan game engine with Cython GPU acceleration.
+ARES is a cross-platform, modular game engine written in Python 3.12+ with Cython GPU acceleration and Vulkan rendering. It is designed for high performance, rapid iteration, and extensibility, focusing on 2D game development with future 3D support planned. Ares leverages Vulkan for advanced, ultra-fast, and open graphics.
 
 ## Features
 
-- SDL2-based windowing and input system
-- Cython-accelerated math and physics operations
-- Vulkan rendering support
-- Modern Python (3.12+) codebase
-- Comprehensive configuration system
-- OS Independent builds & executables
-- Parallel CPU cores with multi-threading support
-- Built-in CUDA and AMD support
-- 🔥Ultra-fast incremental build system
+- **Vulkan Rendering:** Advanced, ultra-fast, and open graphics via Vulkan backend.
+- **Cython Acceleration:** High-performance math and physics operations.
+- **Cross-Platform:** Windows, Linux, and macOS support.
+- **Modern Python (3.12+):** Clean, maintainable codebase.
+- **ECS Architecture:** Entity Component System for scalable, maintainable game logic.
+- **Integrated Tooling:** Scene and dialog editors (planned), asset management, and CLI utilities.
+- **Flexible Configuration:** Layered INI-based system for project, build, and engine settings.
+- **Automated Build & Packaging:** OS-independent builds, asset bundling, and PyInstaller integration.
+- **Comprehensive Logging & Telemetry:** Debugging, profiling, and CI integration.
+- **State Management:** Hierarchical FSM for complex behaviors.
+- **User Interface:** Basic UI system for dialog and menus.
+- **Interaction System:** Player-NPC and world object interaction support.
+- **Ultra-fast Incremental Build System:** Efficient artifact tracking and rebuilds.
 
 ## Installation
 
 ### Requirements
 
 - Python 3.12 or higher
-- C++ compiler (Visual Studio, GCC, Clang)
-- Ninja build system (optional, for faster builds)
+- C++ compiler (Visual Studio, GCC, Clang, LLVM)
 
 ### Install from GitHub (recommended)
 
-To install directly from GitHub, run:
-
 ```bash
 # Clone the repository
-git clone https://github.com/naxzyu/ares-engine.git
-cd ares-engine
+git clone https://github.com/NaXzyu/ARES.git
+cd ARES
 
-# Create a virtual environment (optional but recommended)
-python -m venv .venv
+# Create a virtual environment
+uv venv --python=3.12
+
+# Activate your environment
 .venv\Scripts\activate  # For Linux/macOS: source .venv/bin/activate
 
 # Install in development mode with all dependencies
-pip install -e .
+uv pip install -e .[dev]
 ```
 
 ## Building the Engine
 
 ```bash
 # Build the engine
-ares build engine
+uv run ares build engine
 ```
 
 ## Building a Project
 
 ```bash
 # Build an example project
-ares build examples\hello_world
+uv run ares build examples\hello_world
 
 # Force rebuilding a project
-ares build your\project\path --force
+uv run ares build your\project\path --force
 
-# Cleaning your build
-ares clean
+# Clean your build
+uv run ares clean
 ```
 
 ## Usage
 
-The follow code snippets are examples of how to use Ares Engine:
+Below is a minimal example of using Ares Engine:
 
 ```python
 import ares
@@ -78,12 +81,12 @@ while window.running:
     # Process window events
     if not window.process_events():
         break
-    
+
     # Update input state
     input_system.update()
-    
+
     # Your game logic here...
-    
+
     # Close with Escape key
     if input_system.is_key_pressed(ares.sdl2.SDL_SCANCODE_ESCAPE):
         window.close()
@@ -94,25 +97,25 @@ window.close()
 
 ## License
 
-This dataset is licensed under the [Apache 2.0 License](LICENSE)
+This project is licensed under the [Apache 2.0 License](LICENSE).
 
-## Citations
+## Citation
 
-Please use the following BibTeX entry to cite this dataset:
+If you use Ares Engine in your research or projects, please cite:
 
 ```bibtex
 @software{ares-engine,
-  author = {Kara Rawson},
-  title = {Ares Engine: A cross-platform Vulkan game engine with Cython GPU acceleration},
-  year = {2025},
-  howpublished = {\url{https://github.com/NaXzyu/ares-engine}},
+  author = {K. Rawson},
+  title = {ARES: A cross-platform Vulkan game engine with Cython GPU acceleration},
+  year = {2026},
+  howpublished = {\url{https://github.com/NaXzyu/ARES}},
   note = {Accessed: 2026-01-26}
 }
 ```
 
 ## Contact
 
-For questions or support, please contact us at:
+For questions or support, please contact:
 
 - **Email**: <backrqqms@gmail.com>
 - **Discord**: [Join our Discord](https://discord.gg/2xpqjDUkHD)
