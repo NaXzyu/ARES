@@ -3,7 +3,7 @@ Compiler configuration settings for the Ares Engine project.
 """
 
 from .base_config import BaseConfig
-from ares.utils.utils import is_windows
+from ares.utils.build.build_utils import BuildUtils
 
 class CompilerConfig(BaseConfig):
 
@@ -16,7 +16,7 @@ class CompilerConfig(BaseConfig):
         # Compiler section
         self.set("compiler", "optimization_level", "O3")
         self.set("compiler", "debug_symbols", "False")
-        self.set("compiler", "additional_flags", "/favor:AMD64 /DWIN64" if is_windows() else "-march=native")
+        self.set("compiler", "additional_flags", "/favor:AMD64 /DWIN64" if BuildUtils.is_windows() else "-march=native")
         self.set("compiler", "parallel_jobs", "8")
         self.set("compiler", "include_dirs", "")
         self.set("compiler", "library_dirs", "")
@@ -34,7 +34,7 @@ class CompilerConfig(BaseConfig):
         flags = []
         
         # Skip common flags and only use platform-specific flags
-        if is_windows():
+        if BuildUtils.is_windows():
             platform_flags = self.get("compiler_flags", "windows", "")
             if platform_flags:
                 flags.extend(platform_flags.split())
@@ -50,7 +50,7 @@ class CompilerConfig(BaseConfig):
         
         # Add any debug symbols if needed
         if self.get_bool("compiler", "debug_symbols", False):
-            if is_windows():
+            if BuildUtils.is_windows():
                 flags.append("/Zi")
             else:
                 flags.append("-g")
@@ -93,7 +93,7 @@ class CompilerConfig(BaseConfig):
             "enable_lto": self.is_lto_enabled(),
             "include_dirs": self.get_include_dirs(),
             "library_dirs": self.get_library_dirs(),
-            "platform_flags": "windows" if is_windows() else "unix"
+            "platform_flags": "windows" if BuildUtils.is_windows() else "unix"
         }
     
     def initialize(self, *args, **kwargs):

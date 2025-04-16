@@ -100,8 +100,8 @@ class ConfigManager:
             from ares.utils.paths import Paths
             embedded_file = Paths.get_embedded_ini_file(filename)
             if embedded_file.exists():
-                from ares.utils.utils import copy_file_with_logging
-                copy_file_with_logging(embedded_file, config_path)
+                from ares.utils import BuildUtils
+                BuildUtils.copy_file_with_logging(embedded_file, config_path)
         
         return config_path
 

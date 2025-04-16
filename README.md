@@ -1,59 +1,70 @@
-# Ares Engine
+# ARES
 
-A cross-platform Vulkan game engine with Cython GPU acceleration.
+ARES is a cross-platform, modular game engine written in Python 3.12+ with Cython GPU acceleration and Vulkan rendering. It is designed for high performance, rapid iteration, and extensibility, focusing on 2D game development with future 3D support planned. Ares leverages Vulkan for advanced, ultra-fast, and open graphics.
 
 ## Features
 
-- SDL2-based windowing and input system
-- Cython-accelerated math and physics operations
-- Vulkan rendering support
-- Modern Python (3.12+) codebase
-- Comprehensive configuration system
-- OS Independent builds & executables
-- Parallel CPU cores with multi-threading support
-- Built-in CUDA and AMD support
-- 🔥Ultra-fast incremental build system
+- **Vulkan Rendering:** Advanced, ultra-fast, and open graphics via Vulkan backend.
+- **Cython Acceleration:** High-performance math and physics operations.
+- **Cross-Platform:** Windows, Linux, and macOS support.
+- **Modern Python (3.12+):** Clean, maintainable codebase.
+- **ECS Architecture:** Entity Component System for scalable, maintainable game logic.
+- **Integrated Tooling:** Scene and dialog editors (planned), asset management, and CLI utilities.
+- **Flexible Configuration:** Layered INI-based system for project, build, and engine settings.
+- **Automated Build & Packaging:** OS-independent builds, asset bundling, and PyInstaller integration.
+- **Comprehensive Logging & Telemetry:** Debugging, profiling, and CI integration.
+- **State Management:** Hierarchical FSM for complex behaviors.
+- **User Interface:** Basic UI system for dialog and menus.
+- **Interaction System:** Player-NPC and world object interaction support.
+- **Ultra-fast Incremental Build System:** Efficient artifact tracking and rebuilds.
 
 ## Installation
 
 ### Requirements
 
 - Python 3.12 or higher
-- C++ compiler (Visual Studio, GCC, Clang)
-- Ninja build system (optional, for parallel builds)
+- C++ compiler (Visual Studio, GCC, Clang, LLVM)
 
-#### Install from GitHub (recommended)
-
-To install directly from GitHub, run:
+### Install from GitHub (recommended)
 
 ```bash
-pip install git+https://github.com/naxzyu/ares-engine.git
+# Clone the repository
+git clone https://github.com/NaXzyu/ARES.git
+cd ARES
+
+# Create a virtual environment
+uv venv --python=3.12
+
+# Activate your environment
+.venv\Scripts\activate  # For Linux/macOS: source .venv/bin/activate
+
+# Install in development mode with all dependencies
+uv pip install -e .[dev]
 ```
 
-You can also add it to your project's requirements.txt.
-
-### Building
-
-You may also choose to build the engine from the orginal source code from scratch. This is a relatively easy process if you follow the steps below:
-
-#### Using setup.py (recommended for development)
-
-Clone the repository and run the setup utility:
+## Building the Engine
 
 ```bash
-git clone https://github.com/naxzyu/ares-engine.git
-cd ares-engine
-
-# Creates a virtual environment automatically.
-python setup.py
-
 # Build the engine
-python setup.py --build
+uv run ares build engine
+```
+
+## Building a Project
+
+```bash
+# Build an example project
+uv run ares build examples\hello_world
+
+# Force rebuilding a project
+uv run ares build your\project\path --force
+
+# Clean your build
+uv run ares clean
 ```
 
 ## Usage
 
-The follow code snippets are examples of how to use Ares Engine:
+Below is a minimal example of using Ares Engine:
 
 ```python
 import ares
@@ -70,12 +81,12 @@ while window.running:
     # Process window events
     if not window.process_events():
         break
-    
+
     # Update input state
     input_system.update()
-    
+
     # Your game logic here...
-    
+
     # Close with Escape key
     if input_system.is_key_pressed(ares.sdl2.SDL_SCANCODE_ESCAPE):
         window.close()
@@ -84,51 +95,27 @@ while window.running:
 window.close()
 ```
 
-## Configuration
-
-The configuration for Ares Engine is very straight-forward and modular. The Engine configuration is stored in INI files:
-
-- `engine.ini` - Core engine settings
-- `build.ini` - Build and compilation settings
-- `package.ini` - Source code definitions
-
-Settings are automatically loaded at startup, and can be accessed through the configuration API:
-
-```python
-from ares.config import engine_config, build_config
-
-# Get current display resolution
-width, height = engine_config.get_resolution()
-
-# Change fullscreen mode
-engine_config.set_fullscreen(True)
-engine_config.save()  # Save changes
-
-# Get build version
-version = build_config.get_version_string()
-```
-
 ## License
 
-This dataset is licensed under the [Apache 2.0 License](LICENSE)
+This project is licensed under the [Apache 2.0 License](LICENSE).
 
-## Citations
+## Citation
 
-Please use the following BibTeX entry to cite this dataset:
+If you use Ares Engine in your research or projects, please cite:
 
 ```bibtex
 @software{ares-engine,
-  author = {Kara Rawson, Aimee Chrzanowski},
-  title = {Ares Engine: A cross-platform Vulkan game engine with Cython GPU acceleration},
-  year = {2025},
-  howpublished = {\url{https://github.com/NaXzyu/ares-engine}},
+  author = {K. Rawson},
+  title = {ARES: A cross-platform Vulkan game engine with Cython GPU acceleration},
+  year = {2026},
+  howpublished = {\url{https://github.com/NaXzyu/ARES}},
   note = {Accessed: 2026-01-26}
 }
 ```
 
 ## Contact
 
-For questions or support, please contact us at:
+For questions or support, please contact:
 
 - **Email**: <backrqqms@gmail.com>
 - **Discord**: [Join our Discord](https://discord.gg/2xpqjDUkHD)
